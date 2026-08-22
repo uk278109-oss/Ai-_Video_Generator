@@ -6,12 +6,6 @@
 
     <title>Free AI Video Generator</title>
 
-    <!-- Current Gradio JavaScript Client -->
-    <script type="module">
-        import { Client } from "https://cdn.jsdelivr.net/npm/@gradio/client/dist/index.min.js";
-        window.GradioClient = Client;
-    </script>
-
     <style>
         * {
             box-sizing: border-box;
@@ -267,270 +261,111 @@
 
 </div>
 
-<script type="module">
 
-    const generateBtn =
-        document.getElementById("generateBtn");
+<script>
+    const generateBtn = document.getElementById("generateBtn");
+    const promptInput = document.getElementById("promptInput");
+    const statusBox = document.getElementById("statusBox");
+    const statusText = document.getElementById("status");
+    const videoContainer = document.getElementById("videoContainer");
+    const outputVideo = document.getElementById("outputVideo");
+    const downloadBtn = document.getElementById("downloadBtn");
 
-    const promptInput =
-        document.getElementById("promptInput");
-
-    const statusBox =
-        document.getElementById("statusBox");
-
-    const statusText =
-        document.getElementById("status");
-
-    const videoContainer =
-        document.getElementById("videoContainer");
-
-    const outputVideo =
-        document.getElementById("outputVideo");
-
-    const downloadBtn =
-        document.getElementById("downloadBtn");
-
+    let currentVideoUrl = null;
 
     function showStatus(message, type = "") {
-
         statusBox.style.display = "block";
-
         statusText.className = type;
-
-        statusText.innerHTML =
-            `<span class="loader"></span>${message}`;
+        statusText.innerHTML = `<span class="loader"></span>${message}`;
     }
 
-
-    function hideStatus() {
-
-        statusBox.style.display = "none";
+    function showError(message) {
+        statusBox.style.display = "block";
+        statusText.className = "error";
+        statusText.textContent = "❌ " + message;
     }
-
-
-    function getVideoUrl(result) {
-
-        console.log("Gradio result:", result);
-
-        if (!result || !result.data) {
-            return null;
-        }
-
-        const data = result.data;
-
-        /*
-         * Gradio can return different structures
-         * depending on the Space.
-         */
-
-        for (const item of data) {
-
-            if (!item) continue;
-
-            // File object
-            if (typeof item === "object" && item.url) {
-                return item.url;
-            }
-
-            // String URL
-            if (
-                typeof item === "string" &&
-                (
-                    item.startsWith("http://") ||
-                    item.startsWith("https://") ||
-                    item.endsWith(".mp4")
-                )
-            ) {
-                return item;
-            }
-
-            // Nested file object
-            if (
-                typeof item === "object" &&
-                item.path &&
-                typeof item.path === "string"
-            ) {
-                return item.path;
-            }
-        }
-
-        return null;
-    }
-
 
     generateBtn.addEventListener("click", async () => {
-
-        const prompt =
-            promptInput.value.trim();
-
+        const prompt = promptInput.value.trim();
 
         if (!prompt) {
-
-            alert(
-                "Meharbani karke pehle video prompt likhein!"
-            );
-
+            alert("Meharbani karke pehle video prompt likhein!");
             promptInput.focus();
-
             return;
         }
 
-
         generateBtn.disabled = true;
+        generateBtn.innerText = "⏳ Processing...";
+        videoContainer.style.display = "none";
 
-        generateBtn.innerText =
-            "⏳ Processing...";
-
-        videoContainer.style.display =
-            "none";
-
+        if (currentVideoUrl) {
+            URL.revokeObjectURL(currentVideoUrl);
+            currentVideoUrl = null;
+        }
 
         try {
+            showStatus("AI se video generate ho rahi hai... thora wait karein.");
 
-            showStatus(
-                "Hugging Face AI server se connect ho raha hai..."
-            );
+            const response = await fetch("/api/generate-video", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ prompt })
+            });
 
+            if (!response.ok) {
+                let message = "Video generate nahi ho saki.";
 
-            /*
-             * Connect to Hugging Face Space
-             *
-             * IMPORTANT:
-             * Space ka API endpoint available hona chahiye.
-             */
+                try {
+                    const errorData = await response.json();
+                    message = errorData.error || message;
+                } catch (_) {
+                    // Keep the fallback message if the server did not return JSON.
+                }
 
-            const app =
-                await window.GradioClient.connect(
-                    "fffiloni/LTX-Video-Inference"
-                );
-
-
-            showStatus(
-                "AI model connected. Video render ho rahi hai..."
-            );
-
-
-            /*
-             * Current Gradio JS client normally expects
-             * parameters as an ARRAY.
-             *
-             * IMPORTANT:
-             * The exact endpoint/parameters depend on
-             * the current Space API.
-             */
-
-            const result =
-                await app.predict(
-                    "/generate_video",
-                    [
-                        prompt,
-                        "low quality, blurry, distorted",
-                        8,
-                        3,
-                        20
-                    ]
-                );
-
-
-            console.log(
-                "AI response:",
-                result
-            );
-
-
-            const videoUrl =
-                getVideoUrl(result);
-
-
-            if (!videoUrl) {
-
-                console.error(
-                    "Unexpected result:",
-                    result
-                );
-
-                throw new Error(
-                    "Video URL response mein nahi mili."
-                );
+                throw new Error(message);
             }
 
+            const videoBlob = await response.blob();
 
-            outputVideo.src =
-                videoUrl;
+            if (!videoBlob || videoBlob.size === 0) {
+                throw new Error("AI server ne empty video response diya.");
+            }
 
-            downloadBtn.href =
-                videoUrl;
+            currentVideoUrl = URL.createObjectURL(videoBlob);
 
+            outputVideo.src = currentVideoUrl;
+            outputVideo.load();
 
-            videoContainer.style.display =
-                "block";
+            downloadBtn.href = currentVideoUrl;
+            downloadBtn.download = "ai-generated-video.mp4";
 
+            videoContainer.style.display = "block";
 
-            showStatus(
-                "🎉 Video successfully generated!",
-                "success"
-            );
-
+            statusBox.style.display = "block";
+            statusText.className = "success";
+            statusText.textContent = "🎉 Video successfully generated!";
 
             outputVideo.scrollIntoView({
                 behavior: "smooth",
                 block: "center"
             });
 
+        } catch (error) {
+            console.error("Video generation error:", error);
+            showError(error.message || "Video generate nahi ho saki.");
+        } finally {
+            generateBtn.disabled = false;
+            generateBtn.innerText = "🚀 Generate Video";
         }
-
-        catch (error) {
-
-            console.error(
-                "Video generation error:",
-                error
-            );
-
-
-            statusText.innerHTML =
-                "❌ Video generate nahi ho saki.";
-
-
-            statusText.className =
-                "error";
-
-
-            statusBox.style.display =
-                "block";
-
-
-            let message =
-                "Hugging Face server busy ho sakta hai.";
-
-
-            if (error && error.message) {
-
-                console.log(
-                    "Detailed error:",
-                    error.message
-                );
-
-                message +=
-                    " Browser Console mein detailed error check karein.";
-            }
-
-
-            statusText.innerHTML =
-                "❌ " + message;
-        }
-
-        finally {
-
-            generateBtn.disabled =
-                false;
-
-            generateBtn.innerText =
-                "🚀 Generate Video";
-        }
-
     });
 
+    window.addEventListener("beforeunload", () => {
+        if (currentVideoUrl) URL.revokeObjectURL(currentVideoUrl);
+    });
 </script>
 
+
 </body>
-  </html>
+    </html>
