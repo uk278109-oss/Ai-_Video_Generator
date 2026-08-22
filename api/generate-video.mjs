@@ -1,19 +1,21 @@
 import { InferenceClient } from "@huggingface/inference";
 
-export const maxDuration = 60;
+export const config = {
+  maxDuration: 60
+};
 
 export default async function handler(req, res) {
-  // Only allow POST requests
   if (req.method !== "POST") {
+    res.setHeader("Allow", "POST");
     return res.status(405).json({
-      error: "Method not allowed"
+      error: "Method not allowed."
     });
   }
 
   try {
     const { prompt } = req.body || {};
 
-    if (!prompt || typeof prompt !== "string") {
+    if (typeof prompt !== "string" || !prompt.trim()) {
       return res.status(400).json({
         error: "Please enter a video prompt."
       });
@@ -25,38 +27,43 @@ export default async function handler(req, res) {
       });
     }
 
-    const token = process.env.HF_TOKEN;
-
-    if (!token) {
+    if (!process.env.HF_TOKEN) {
       return res.status(500).json({
         error: "HF_TOKEN is not configured on the server."
       });
     }
 
-    const hf = new InferenceClient(token);
+    const client = new InferenceClient(process.env.HF_TOKEN);
 
-    const video = await hf.textToVideo({
+    const video = await client.textToVideo({
       provider: "fal-ai",
       model: "Wan-AI/Wan2.2-TI2V-5B",
-      inputs: prompt
+      inputs: prompt.trim()
     });
 
-    const arrayBuffer = await video.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
+    const buffer = Buffer.from(
+      await video.arrayBuffer()
+    );
 
-    return res.status(200).json({
-      success: true,
-      video: `data:video/mp4;base64,${base64}`
-    });
+    res.setHeader(
+      "Content-Type",
+      "video/mp4"
+    );
+
+    res.setHeader(
+      "Content-Length",
+      buffer.length
+    );
+
+    return res.status(200).send(buffer);
 
   } catch (error) {
-    console.error("Video generation error:", error);
+    console.error(error);
 
     return res.status(500).json({
-      success: false,
       error:
         error?.message ||
-        "Video generation failed. Please try again."
+        "Video generation failed."
     });
   }
   }
