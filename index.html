@@ -1,371 +1,598 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-    <title>Free AI Video Generator</title>
+  <title>AI Video Generator</title>
 
-    <style>
-        * {
-            box-sizing: border-box;
-        }
+  <!-- Firebase: replace YOUR_* values with your Firebase Web App config -->
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
-        body {
-            margin: 0;
-            min-height: 100vh;
-            font-family: Arial, sans-serif;
-            background:
-                radial-gradient(circle at top, #164e63, transparent 35%),
-                #020617;
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            padding: 20px;
-        }
+  <style>
+    * { box-sizing: border-box; }
 
-        .container {
-            width: 100%;
-            max-width: 650px;
-            background: rgba(15, 23, 42, 0.96);
-            border: 1px solid #334155;
-            border-radius: 20px;
-            padding: 30px 22px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.45);
-        }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Arial, sans-serif;
+      background: #08111f;
+      color: #fff;
+    }
 
-        .logo {
-            font-size: 50px;
-            margin-bottom: 5px;
-        }
+    .app {
+      width: min(900px, 100%);
+      margin: auto;
+      padding: 20px;
+    }
 
-        h1 {
-            margin: 0;
-            font-size: 28px;
-            color: #38bdf8;
-        }
+    .hero {
+      padding: 28px 20px;
+      border: 1px solid #24354f;
+      border-radius: 24px;
+      background:
+        radial-gradient(circle at top right, rgba(56,189,248,.22), transparent 30%),
+        linear-gradient(135deg, #0e1b31, #111827);
+      margin-bottom: 20px;
+    }
 
-        .subtitle {
-            color: #cbd5e1;
-            line-height: 1.6;
-            margin-bottom: 25px;
-        }
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
 
-        label {
-            display: block;
-            text-align: left;
-            margin-bottom: 8px;
-            color: #e2e8f0;
-            font-weight: bold;
-        }
+    .logo {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      font-size: 30px;
+      border-radius: 18px;
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+    }
 
-        textarea {
-            width: 100%;
-            min-height: 120px;
-            resize: vertical;
-            padding: 14px;
-            border-radius: 12px;
-            border: 1px solid #475569;
-            background: #020617;
-            color: white;
-            font-size: 16px;
-            outline: none;
-        }
+    h1 { margin: 0; font-size: 28px; }
+    .sub { color: #b8c4d6; line-height: 1.6; }
 
-        textarea:focus {
-            border-color: #38bdf8;
-            box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.15);
-        }
+    .tabs {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 20px 0;
+    }
 
-        button {
-            width: 100%;
-            margin-top: 18px;
-            padding: 15px;
-            border: none;
-            border-radius: 12px;
-            background: linear-gradient(135deg, #0284c7, #2563eb);
-            color: white;
-            font-size: 17px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-        }
+    .tab {
+      border: 1px solid #334155;
+      background: #111827;
+      color: white;
+      padding: 14px;
+      border-radius: 14px;
+      cursor: pointer;
+      font-weight: bold;
+    }
 
-        button:hover {
-            transform: translateY(-1px);
-            filter: brightness(1.1);
-        }
+    .tab.active {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      border-color: transparent;
+    }
 
-        button:disabled {
-            background: #475569;
-            cursor: not-allowed;
-            transform: none;
-        }
+    .card {
+      background: #101827;
+      border: 1px solid #24354f;
+      border-radius: 20px;
+      padding: 20px;
+    }
 
-        #statusBox {
-            display: none;
-            margin-top: 20px;
-            padding: 15px;
-            border-radius: 12px;
-            background: #0f172a;
-            border: 1px solid #334155;
-            text-align: left;
-        }
+    label {
+      display: block;
+      margin: 18px 0 8px;
+      font-weight: bold;
+    }
 
-        #status {
-            margin: 0;
-            color: #bae6fd;
-            font-size: 14px;
-            line-height: 1.6;
-        }
+    textarea {
+      width: 100%;
+      min-height: 130px;
+      resize: vertical;
+      padding: 15px;
+      border-radius: 14px;
+      border: 1px solid #334155;
+      background: #08111f;
+      color: white;
+      font-size: 16px;
+    }
 
-        .loader {
-            width: 22px;
-            height: 22px;
-            border: 3px solid #334155;
-            border-top-color: #38bdf8;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            display: inline-block;
-            vertical-align: middle;
-            margin-right: 8px;
-        }
+    .options {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 14px;
+    }
 
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
+    select {
+      width: 100%;
+      padding: 14px;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background: #08111f;
+      color: white;
+      font-size: 15px;
+    }
 
-        #videoContainer {
-            display: none;
-            margin-top: 25px;
-        }
+    .generate {
+      width: 100%;
+      margin-top: 22px;
+      padding: 16px;
+      border: 0;
+      border-radius: 14px;
+      background: linear-gradient(135deg, #0284c7, #7c3aed);
+      color: white;
+      font-size: 17px;
+      font-weight: bold;
+      cursor: pointer;
+    }
 
-        #videoContainer h3 {
-            color: #67e8f9;
-        }
+    .generate:disabled {
+      opacity: .6;
+      cursor: not-allowed;
+    }
 
-        video {
-            width: 100%;
-            max-height: 500px;
-            border-radius: 14px;
-            border: 2px solid #38bdf8;
-            background: black;
-        }
+    #status {
+      display: none;
+      margin-top: 18px;
+      padding: 14px;
+      border-radius: 12px;
+      background: #172033;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+    }
 
-        .downloadBtn {
-            display: inline-block;
-            margin-top: 15px;
-            padding: 12px 20px;
-            border-radius: 10px;
-            background: #16a34a;
-            color: white;
-            text-decoration: none;
-            font-weight: bold;
-        }
+    #result {
+      display: none;
+      margin-top: 22px;
+    }
 
-        .small {
-            margin-top: 20px;
-            font-size: 12px;
-            color: #64748b;
-            line-height: 1.5;
-        }
+    video, #outputImage {
+      width: 100%;
+      max-height: 600px;
+      object-fit: contain;
+      background: #000;
+      border-radius: 16px;
+      border: 1px solid #334155;
+    }
 
-        .error {
-            color: #fca5a5 !important;
-        }
+    .download {
+      display: inline-block;
+      margin-top: 14px;
+      padding: 13px 18px;
+      border-radius: 12px;
+      background: #16a34a;
+      color: white;
+      text-decoration: none;
+      font-weight: bold;
+    }
 
-        .success {
-            color: #86efac !important;
-        }
+    .warning {
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 12px;
+      background: #3b2a0c;
+      color: #fde68a;
+      font-size: 14px;
+      line-height: 1.5;
+    }
 
-        @media (max-width: 500px) {
-            body {
-                padding: 10px;
-            }
+    .account {
+      margin-top: 14px;
+      color: #94a3b8;
+      font-size: 13px;
+    }
 
-            .container {
-                padding: 25px 16px;
-            }
-
-            h1 {
-                font-size: 24px;
-            }
-        }
-    </style>
+    @media(max-width:600px) {
+      .options { grid-template-columns: 1fr; }
+      h1 { font-size: 23px; }
+    }
+  </style>
 </head>
 
 <body>
 
-<div class="container">
+<div class="app">
 
-    <div class="logo">🎬</div>
+  <section class="hero">
+    <div class="brand">
+      <div class="logo">🎬</div>
 
-    <h1>Free AI Video Generator</h1>
+      <div>
+        <h1>AI Video Generator</h1>
+        <div class="sub">
+          Create AI images and videos from your imagination.
+        </div>
+      </div>
+    </div>
 
-    <p class="subtitle">
-        Apna idea/prompt likhein aur AI se video generate karne ki koshish karein.
-        No credit card required.
-    </p>
+    <div class="account" id="accountStatus">
+      Connecting account...
+    </div>
+  </section>
 
-    <label for="promptInput">
-        ✨ Your Video Prompt
-    </label>
+  <div class="tabs">
+    <button class="tab active" id="imageTab">🖼️ Generate Image</button>
+    <button class="tab" id="videoTab">🎬 Generate Video</button>
+  </div>
+
+  <section class="card">
+
+    <label for="prompt">✨ Describe what you want</label>
 
     <textarea
-        id="promptInput"
-        placeholder="Example: A cute little mouse running through a magical forest, cinematic lighting, realistic animation..."
+      id="prompt"
+      placeholder="Example: A futuristic city at night, flying cars, cinematic lighting, highly detailed..."
     ></textarea>
 
-    <button id="generateBtn">
-        🚀 Generate Video
+    <div class="options">
+
+      <div>
+        <label for="ratio">📐 Aspect Ratio</label>
+
+        <select id="ratio">
+          <option value="1:1">1:1 Square</option>
+          <option value="16:9">16:9 Landscape</option>
+          <option value="9:16">9:16 Portrait</option>
+        </select>
+      </div>
+
+      <div id="durationBox" style="display:none;">
+        <label for="duration">⏱️ Duration</label>
+
+        <select id="duration">
+          <option value="3">3 Seconds</option>
+          <option value="5">5 Seconds</option>
+        </select>
+      </div>
+
+    </div>
+
+    <button class="generate" id="generateBtn">
+      🚀 Generate Image
     </button>
 
-    <div id="statusBox">
-        <p id="status">
-            <span class="loader"></span>
-            Connecting to AI...
-        </p>
+    <div id="status"></div>
+
+    <div id="result">
+
+      <h3 id="resultTitle">🎉 Your Result Is Ready!</h3>
+
+      <img id="outputImage" style="display:none;" alt="Generated AI image">
+
+      <video
+        id="outputVideo"
+        style="display:none;"
+        controls
+        playsinline
+      ></video>
+
+      <br>
+
+      <a
+        id="downloadBtn"
+        class="download"
+        href="#"
+        download
+        target="_blank"
+      >
+        ⬇️ Download
+      </a>
+
+      <div class="warning">
+        ⚠️ Please download your result and save it to your device.
+        Generated files may be temporary and can become unavailable later.
+      </div>
+
     </div>
 
-    <div id="videoContainer">
-
-        <h3>🎉 Your AI Video Is Ready!</h3>
-
-        <video
-            id="outputVideo"
-            controls
-            playsinline
-        ></video>
-
-        <br>
-
-        <a
-            id="downloadBtn"
-            class="downloadBtn"
-            href="#"
-            target="_blank"
-            download
-        >
-            ⬇️ Open / Download Video
-        </a>
-
-    </div>
-
-    <p class="small">
-        ⚠️ Free AI servers can be busy or temporarily unavailable.
-        Generation time depends on the Hugging Face Space and its queue.
-    </p>
+  </section>
 
 </div>
 
-
 <script>
-    const generateBtn = document.getElementById("generateBtn");
-    const promptInput = document.getElementById("promptInput");
-    const statusBox = document.getElementById("statusBox");
-    const statusText = document.getElementById("status");
-    const videoContainer = document.getElementById("videoContainer");
-    const outputVideo = document.getElementById("outputVideo");
-    const downloadBtn = document.getElementById("downloadBtn");
+  /*
+   * Firebase
+   * Replace these values with your own Firebase Web App config.
+   */
 
-    let currentVideoUrl = null;
+  const firebaseConfig = {
+    apiKey: "YOUR_API_KEY",
+    authDomain: "YOUR_AUTH_DOMAIN",
+    projectId: "YOUR_PROJECT_ID",
+    storageBucket: "YOUR_STORAGE_BUCKET",
+    messagingSenderId: "YOUR_MESSAGING_SENDER_ID",
+    appId: "YOUR_APP_ID"
+  };
 
-    function showStatus(message, type = "") {
-        statusBox.style.display = "block";
-        statusText.className = type;
-        statusText.innerHTML = `<span class="loader"></span>${message}`;
+  let firebaseReady = false;
+  let db = null;
+  let auth = null;
+
+  try {
+    if (!firebaseConfig.apiKey.startsWith("YOUR_")) {
+      firebase.initializeApp(firebaseConfig);
+
+      auth = firebase.auth();
+      db = firebase.firestore();
+
+      auth.signInAnonymously()
+        .then(() => {
+          firebaseReady = true;
+          document.getElementById("accountStatus").textContent =
+            "✓ Connected";
+        })
+        .catch(() => {
+          document.getElementById("accountStatus").textContent =
+            "Guest mode";
+        });
+    } else {
+      document.getElementById("accountStatus").textContent =
+        "Guest mode — Firebase not configured yet";
+    }
+  } catch (error) {
+    console.error(error);
+
+    document.getElementById("accountStatus").textContent =
+      "Guest mode";
+  }
+
+
+  let mode = "image";
+
+  const imageTab = document.getElementById("imageTab");
+  const videoTab = document.getElementById("videoTab");
+
+  const durationBox =
+    document.getElementById("durationBox");
+
+  const generateBtn =
+    document.getElementById("generateBtn");
+
+  const promptInput =
+    document.getElementById("prompt");
+
+  const ratioInput =
+    document.getElementById("ratio");
+
+  const durationInput =
+    document.getElementById("duration");
+
+  const status =
+    document.getElementById("status");
+
+  const result =
+    document.getElementById("result");
+
+  const outputImage =
+    document.getElementById("outputImage");
+
+  const outputVideo =
+    document.getElementById("outputVideo");
+
+  const downloadBtn =
+    document.getElementById("downloadBtn");
+
+
+  imageTab.onclick = () => {
+    mode = "image";
+
+    imageTab.classList.add("active");
+    videoTab.classList.remove("active");
+
+    durationBox.style.display = "none";
+
+    generateBtn.textContent =
+      "🚀 Generate Image";
+
+    outputVideo.pause();
+    result.style.display = "none";
+  };
+
+
+  videoTab.onclick = () => {
+    mode = "video";
+
+    videoTab.classList.add("active");
+    imageTab.classList.remove("active");
+
+    durationBox.style.display = "block";
+
+    generateBtn.textContent =
+      "🚀 Generate Video";
+
+    result.style.display = "none";
+  };
+
+
+  function showStatus(message) {
+    status.style.display = "block";
+    status.textContent = message;
+  }
+
+
+  async function saveHistory(type, prompt, ratio, duration) {
+
+    if (!firebaseReady || !auth || !db || !auth.currentUser) {
+      return;
     }
 
-    function showError(message) {
-        statusBox.style.display = "block";
-        statusText.className = "error";
-        statusText.textContent = "❌ " + message;
+    try {
+      await db
+        .collection("users")
+        .doc(auth.currentUser.uid)
+        .collection("generations")
+        .add({
+          type,
+          prompt,
+          ratio,
+          duration: duration || null,
+          createdAt:
+            firebase.firestore.FieldValue.serverTimestamp()
+        });
+
+    } catch (error) {
+      console.error("History save error:", error);
+    }
+  }
+
+
+  generateBtn.onclick = async () => {
+
+    const prompt = promptInput.value.trim();
+
+    if (!prompt) {
+      alert("Please enter a prompt first.");
+      promptInput.focus();
+      return;
     }
 
-    generateBtn.addEventListener("click", async () => {
-        const prompt = promptInput.value.trim();
+    generateBtn.disabled = true;
 
-        if (!prompt) {
-            alert("Meharbani karke pehle video prompt likhein!");
-            promptInput.focus();
-            return;
-        }
+    result.style.display = "none";
 
-        generateBtn.disabled = true;
-        generateBtn.innerText = "⏳ Processing...";
-        videoContainer.style.display = "none";
+    outputImage.style.display = "none";
+    outputVideo.style.display = "none";
 
-        if (currentVideoUrl) {
-            URL.revokeObjectURL(currentVideoUrl);
-            currentVideoUrl = null;
-        }
+    const endpoint =
+      mode === "image"
+        ? "/api/generate-image"
+        : "/api/generate-video";
+
+    const body = {
+      prompt,
+      ratio: ratioInput.value
+    };
+
+    if (mode === "video") {
+      body.duration =
+        Number(durationInput.value);
+    }
+
+    try {
+
+      showStatus(
+        mode === "image"
+          ? "🎨 AI image is being generated..."
+          : "🎬 AI video is being generated..."
+      );
+
+      const response =
+        await fetch(endpoint, {
+          method: "POST",
+
+          headers: {
+            "Content-Type": "application/json"
+          },
+
+          body: JSON.stringify(body)
+        });
+
+
+      if (!response.ok) {
+
+        let message =
+          "Generation failed. Please try again.";
 
         try {
-            showStatus("AI se video generate ho rahi hai... thora wait karein.");
+          const data =
+            await response.json();
 
-            const response = await fetch("/api/generate-video", {
-                method: "POST",
-                headers: {
-                    "Content-Type": "application/json"
-                },
-                body: JSON.stringify({ prompt })
-            });
+          message =
+            data.error || message;
 
-            if (!response.ok) {
-                let message = "Video generate nahi ho saki.";
+        } catch (_) {}
 
-                try {
-                    const errorData = await response.json();
-                    message = errorData.error || message;
-                } catch (_) {
-                    // Keep the fallback message if the server did not return JSON.
-                }
+        throw new Error(message);
+      }
 
-                throw new Error(message);
-            }
 
-            const videoBlob = await response.blob();
+      const blob =
+        await response.blob();
 
-            if (!videoBlob || videoBlob.size === 0) {
-                throw new Error("AI server ne empty video response diya.");
-            }
+      const url =
+        URL.createObjectURL(blob);
 
-            currentVideoUrl = URL.createObjectURL(videoBlob);
 
-            outputVideo.src = currentVideoUrl;
-            outputVideo.load();
+      if (mode === "image") {
 
-            downloadBtn.href = currentVideoUrl;
-            downloadBtn.download = "ai-generated-video.mp4";
+        outputImage.src = url;
 
-            videoContainer.style.display = "block";
+        outputImage.style.display =
+          "block";
 
-            statusBox.style.display = "block";
-            statusText.className = "success";
-            statusText.textContent = "🎉 Video successfully generated!";
+        document.getElementById(
+          "resultTitle"
+        ).textContent =
+          "🎉 Your AI Image Is Ready!";
 
-            outputVideo.scrollIntoView({
-                behavior: "smooth",
-                block: "center"
-            });
+        downloadBtn.download =
+          "ai-image.png";
 
-        } catch (error) {
-            console.error("Video generation error:", error);
-            showError(error.message || "Video generate nahi ho saki.");
-        } finally {
-            generateBtn.disabled = false;
-            generateBtn.innerText = "🚀 Generate Video";
-        }
-    });
+      } else {
 
-    window.addEventListener("beforeunload", () => {
-        if (currentVideoUrl) URL.revokeObjectURL(currentVideoUrl);
-    });
+        outputVideo.src = url;
+
+        outputVideo.style.display =
+          "block";
+
+        document.getElementById(
+          "resultTitle"
+        ).textContent =
+          "🎉 Your AI Video Is Ready!";
+
+        downloadBtn.download =
+          "ai-video.mp4";
+      }
+
+
+      downloadBtn.href = url;
+
+      result.style.display =
+        "block";
+
+      status.style.display =
+        "none";
+
+
+      await saveHistory(
+        mode,
+        prompt,
+        ratioInput.value,
+        mode === "video"
+          ? Number(durationInput.value)
+          : null
+      );
+
+
+      result.scrollIntoView({
+        behavior: "smooth",
+        block: "start"
+      });
+
+    } catch (error) {
+
+      console.error(error);
+
+      showStatus(
+        "❌ " +
+        (error.message ||
+          "Generation failed. Please try again.")
+      );
+
+    } finally {
+
+      generateBtn.disabled =
+        false;
+    }
+  };
 </script>
 
-
 </body>
-    </html>
+</html>
