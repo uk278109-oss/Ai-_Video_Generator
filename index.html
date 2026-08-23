@@ -1201,47 +1201,67 @@ VIDEO DURATION
   id="ideasPage"
 >
 
-<section class="hero">
+  <section class="hero">
 
-<small>
-AI IDEA GENERATOR
-</small>
+    <small>
+      FIRST AI RESEARCH
+    </small>
 
-<h1>
-Need inspiration?
-</h1>
+    <h1>
+      Ask anything.
+    </h1>
 
-<p>
-Generate creative ideas for videos,
-images and content.
-</p>
+    <p>
+      Research, learn and chat with First AI.
+    </p>
 
-</section>
-
-
-<section class="createCard card">
-
-<input
-  class="ideaInput"
-  id="ideaPrompt"
-  placeholder="Example: Funny AI video ideas for TikTok"
-/>
+  </section>
 
 
-<button
-  class="generateBtn"
-  id="generateIdeas"
->
-  ✨ Generate Ideas
-</button>
+  <section class="createCard card researchCard">
+
+    <div
+      class="researchMessages"
+      id="researchMessages"
+    >
+
+      <div class="aiMessage">
+        <b>✦ First AI</b>
+
+        <p>
+          Hello! What would you like to research today?
+        </p>
+      </div>
+
+    </div>
 
 
-<div
-  class="ideasResult"
-  id="ideasResult"
-></div>
+    <div class="researchInputArea">
 
-</section>
+      <textarea
+        class="researchInput"
+        id="researchPrompt"
+        placeholder="Ask anything..."
+        maxlength="2000"
+      ></textarea>
+
+
+      <button
+        class="generateBtn"
+        id="sendResearch"
+      >
+        🔍 Research
+      </button>
+
+    </div>
+
+
+    <div
+      class="researchStatus"
+      id="researchStatus"
+    ></div>
+
+  </section>
 
 </main>
 
