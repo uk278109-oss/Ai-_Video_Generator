@@ -3,7 +3,7 @@ export const config = {
 };
 
 const GPU_WORKER =
-  "https://exhibitions-supervision-projector-translations.trycloudflare.com";
+  "https://point-posts-assigned-stronger.trycloudflare.com";
 
 export default async function handler(req, res) {
 
