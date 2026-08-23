@@ -2476,62 +2476,40 @@ function showPremium(){
    FIREBASE AUTH
 ========================= */
 
-auth.onAuthStateChanged(
-  async user => {
+auth.onAuthStateChanged((u) => {
+  if (u) {
+    uid = u.uid;
 
-    if(user){
+    db.ref("users/" + uid + "/profile").update({
+      lastSeen: firebase.database.ServerValue.TIMESTAMP
+    }).catch((error) => {
+      console.error("Firebase Database Error:", error);
+    });
 
-      uid =
-        user.uid;
-
-
-      try{
-
-        await db
-        .ref(
-          "users/" +
-          uid +
-          "/profile"
-        )
-        .update({
-
-          lastSeen:
-            firebase
-            .database
-            .ServerValue
-            .TIMESTAMP
-
-        });
-
-      }catch(error){
-
-        console.error(
-          error
-        );
-
-      }
-
-    }
-
+    console.log("Firebase connected. UID:", uid);
+  } else {
+    uid = null;
   }
-);
+});
 
-
-auth
-  .signInAnonymously()
-  .catch(error => {
-
-    console.error(
-      error
+auth.signInAnonymously()
+  .then((userCredential) => {
+    console.log(
+      "Anonymous login successful:",
+      userCredential.user.uid
     );
+  })
+  .catch((error) => {
+    console.error("Firebase Anonymous Auth Error:", error);
 
-    showStatus(
+    status(
       "error",
-      "Firebase account connection failed. Enable Anonymous Authentication."
+      "Firebase error: " +
+      error.code +
+      " — " +
+      error.message
     );
-
   });
-
 
 </script>
 
