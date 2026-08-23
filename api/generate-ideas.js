@@ -1,5 +1,4 @@
 export default async function handler(req, res) {
-  // Only allow POST requests
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -8,7 +7,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { prompt, type = "general" } = req.body || {};
+    const { prompt, type = "general", amount = 10 } = req.body || {};
 
     if (!prompt || !prompt.trim()) {
       return res.status(400).json({
@@ -17,33 +16,32 @@ export default async function handler(req, res) {
       });
     }
 
-    // Check Groq API key
-    if (!process.env.GROQ_API_KEY) {
+    const groqApiKey = process.env.GROQ_API_KEY;
+
+    if (!groqApiKey) {
       return res.status(500).json({
         success: false,
         error: "Groq API key is not configured."
       });
     }
 
+    const ideaAmount = Math.min(Number(amount) || 10, 10);
+
     const systemPrompt = `
 You are First AI's creative Text Ideas assistant.
 
-Generate useful, creative and high-quality ideas based on the user's topic.
+Generate exactly ${ideaAmount} useful, creative and high-quality ideas.
 
-The user selected this category: ${type}
+Category selected by the user: ${type}
 
-Your response must:
-- Be written in clear English.
-- Give 10 creative ideas.
-- Number every idea from 1 to 10.
-- Make each idea practical and interesting.
-- For each idea include:
-  1. A short title
-  2. A brief description
-  3. A suggested AI prompt when useful
-
-Do not mention that you are an AI.
-Do not add unnecessary introductions.
+Rules:
+- Write in clear English.
+- Number every idea.
+- Give each idea a short title.
+- Add a brief practical description.
+- Include a suggested AI prompt when useful.
+- Do not mention that you are an AI.
+- Do not add unnecessary introductions.
 `;
 
     const response = await fetch(
@@ -52,7 +50,7 @@ Do not add unnecessary introductions.
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${process.env.GROQ_API_KEY}`
+          "Authorization": `Bearer ${groqApiKey}`
         },
         body: JSON.stringify({
           model: "llama-3.1-8b-instant",
@@ -79,14 +77,11 @@ Do not add unnecessary introductions.
 
       return res.status(response.status).json({
         success: false,
-        error:
-          data?.error?.message ||
-          "Failed to generate ideas."
+        error: data?.error?.message || "Failed to generate ideas."
       });
     }
 
-    const ideas =
-      data?.choices?.[0]?.message?.content;
+    const ideas = data?.choices?.[0]?.message?.content;
 
     if (!ideas) {
       return res.status(500).json({
@@ -97,7 +92,7 @@ Do not add unnecessary introductions.
 
     return res.status(200).json({
       success: true,
-      ideas: ideas
+      ideas
     });
 
   } catch (error) {
@@ -105,7 +100,7 @@ Do not add unnecessary introductions.
 
     return res.status(500).json({
       success: false,
-      error: "Something went wrong while generating ideas."
+      error: error.message || "Something went wrong."
     });
   }
-}
+          }
