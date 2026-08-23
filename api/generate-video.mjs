@@ -1,69 +1,102 @@
-import { InferenceClient } from "@huggingface/inference";
-
 export const config = {
   maxDuration: 60
 };
 
+const GPU_WORKER =
+  "https://exhibitions-supervision-projector-translations.trycloudflare.com";
+
 export default async function handler(req, res) {
+
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
+
     return res.status(405).json({
+      success: false,
       error: "Method not allowed."
     });
   }
 
   try {
+
     const { prompt } = req.body || {};
 
-    if (typeof prompt !== "string" || !prompt.trim()) {
+    if (
+      typeof prompt !== "string" ||
+      !prompt.trim()
+    ) {
       return res.status(400).json({
+        success: false,
         error: "Please enter a video prompt."
       });
     }
 
-    if (prompt.length > 1000) {
-      return res.status(400).json({
-        error: "Prompt is too long."
+    const response = await fetch(
+      `${GPU_WORKER}/generate`,
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type":
+            "application/json"
+        },
+
+        body: JSON.stringify({
+          prompt: prompt.trim()
+        })
+      }
+    );
+
+    const data =
+      await response.json();
+
+    if (!response.ok) {
+
+      return res.status(
+        response.status
+      ).json({
+        success: false,
+        error:
+          data?.detail ||
+          data?.error ||
+          "Video generation failed."
       });
     }
 
-    if (!process.env.HF_TOKEN) {
+    if (
+      !data?.success ||
+      !data?.video_file
+    ) {
       return res.status(500).json({
-        error: "HF_TOKEN is not configured on the server."
+        success: false,
+        error:
+          "Invalid response from GPU worker."
       });
     }
 
-    const client = new InferenceClient(process.env.HF_TOKEN);
+    return res.status(200).json({
+      success: true,
 
-    const video = await client.textToVideo({
-      provider: "fal-ai",
-      model: "Wan-AI/Wan2.2-TI2V-5B",
-      inputs: prompt.trim()
+      video_url:
+        `${GPU_WORKER}/video/${encodeURIComponent(
+          data.video_file
+        )}`,
+
+      filename:
+        data.video_file
     });
-
-    const buffer = Buffer.from(
-      await video.arrayBuffer()
-    );
-
-    res.setHeader(
-      "Content-Type",
-      "video/mp4"
-    );
-
-    res.setHeader(
-      "Content-Length",
-      buffer.length
-    );
-
-    return res.status(200).send(buffer);
 
   } catch (error) {
-    console.error(error);
+
+    console.error(
+      "GPU Worker Error:",
+      error
+    );
 
     return res.status(500).json({
+      success: false,
       error:
         error?.message ||
-        "Video generation failed."
+        "Could not connect to GPU worker."
     });
   }
-  }
+}
