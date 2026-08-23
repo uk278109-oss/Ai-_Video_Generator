@@ -2,9 +2,6 @@ export const config = {
   maxDuration: 60
 };
 
-const BRAVE_API =
-  "https://api.search.brave.com/res/v1/chat/completions";
-
 export default async function handler(req, res) {
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
@@ -28,85 +25,115 @@ export default async function handler(req, res) {
       });
     }
 
-    if (!process.env.BRAVE_SEARCH_API_KEY) {
+    if (!process.env.OPENAI_API_KEY) {
       return res.status(500).json({
         success: false,
-        error: "BRAVE_SEARCH_API_KEY is not configured."
+        error: "OPENAI_API_KEY is not configured."
       });
     }
 
     const history = Array.isArray(messages)
-      ? messages.slice(-10).map((item) => ({
+      ? messages.slice(-12).map(item => ({
           role:
             item.role === "assistant"
               ? "assistant"
               : "user",
-          content: String(item.content || "").slice(0, 4000)
+
+          content:
+            String(item.content || "")
+              .slice(0, 4000)
         }))
       : [];
 
-    const response = await fetch(BRAVE_API, {
-      method: "POST",
-
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json",
-        "X-Subscription-Token":
-          process.env.BRAVE_SEARCH_API_KEY
-      },
-
-      body: JSON.stringify({
-        model: "brave",
-        stream: false,
-
-        messages: [
+    const input = [
+      {
+        role: "system",
+        content: [
           {
-            role: "system",
-            content:
+            type: "input_text",
+            text:
               "You are First AI Research Assistant. " +
-              "Answer like a helpful ChatGPT-style research assistant. " +
-              "Use current web information when relevant. " +
-              "Be clear, accurate, and concise. " +
-              "Explain uncertainty instead of inventing facts. " +
+              "Work like a helpful ChatGPT-style assistant. " +
+              "For questions requiring current or factual web information, " +
+              "use web search. Give clear, useful answers. " +
+              "Do not invent facts. If information is uncertain, say so. " +
               "Use headings and bullet points when helpful."
-          },
-          ...history,
-          {
-            role: "user",
-            content: message.trim()
           }
         ]
-      })
-    });
+      },
 
-    const text = await response.text();
+      ...history.map(item => ({
+        role: item.role,
+        content: [
+          {
+            type: "input_text",
+            text: item.content
+          }
+        ]
+      })),
+
+      {
+        role: "user",
+        content: [
+          {
+            type: "input_text",
+            text: message.trim()
+          }
+        ]
+      }
+    ];
+
+    const response = await fetch(
+      "https://api.openai.com/v1/responses",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json",
+
+          "Authorization":
+            `Bearer ${process.env.OPENAI_API_KEY}`
+        },
+
+        body: JSON.stringify({
+          model: "gpt-5.6-luna",
+
+          tools: [
+            {
+              type: "web_search"
+            }
+          ],
+
+          input
+        })
+      }
+    );
+
+    const raw = await response.text();
 
     let data;
 
     try {
-      data = JSON.parse(text);
+      data = JSON.parse(raw);
     } catch {
       throw new Error(
-        "Research service returned an invalid response."
+        "OpenAI returned an invalid response."
       );
     }
 
     if (!response.ok) {
       throw new Error(
         data?.error?.message ||
-        data?.message ||
-        "Research request failed."
+        "OpenAI research request failed."
       );
     }
 
     const answer =
-      data?.choices?.[0]?.message?.content ||
-      data?.answer ||
-      "";
+      data?.output_text;
 
     if (!answer) {
       throw new Error(
-        "No research answer was returned."
+        "No answer was returned."
       );
     }
 
@@ -116,16 +143,18 @@ export default async function handler(req, res) {
     });
 
   } catch (error) {
+
     console.error(
-      "Research assistant error:",
+      "Research error:",
       error
     );
 
     return res.status(500).json({
       success: false,
+
       error:
         error?.message ||
         "Research assistant failed."
     });
   }
-  }
+}
