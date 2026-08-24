@@ -1,5 +1,10 @@
+import { Client, handle_file } from "@gradio/client";
+
+export const config = {
+  maxDuration: 60
+};
+
 export default async function handler(req, res) {
-  // Only POST requests allowed
   if (req.method !== "POST") {
     return res.status(405).json({
       success: false,
@@ -8,98 +13,76 @@ export default async function handler(req, res) {
   }
 
   try {
-    const {
-      image,
-      prompt,
-      negative_prompt = "",
-      duration = 3.5
-    } = req.body;
+    const { image, prompt, duration = 3.5 } = req.body || {};
 
     if (!image) {
       return res.status(400).json({
         success: false,
-        error: "Please provide an image"
+        error: "Please upload an image first."
       });
     }
 
-    if (!prompt) {
+    if (!prompt || !prompt.trim()) {
       return res.status(400).json({
         success: false,
-        error: "Please provide a prompt"
+        error: "Please enter a motion prompt."
       });
     }
 
-    // Hugging Face Wan 2.2 Video API
-    const response = await fetch(
-      "https://kulkas2pintu-wan555.hf.space/run/generate_video",
-      {
-        method: "POST",
-
-        headers: {
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-          data: [
-            {
-              path: image,
-              url: image,
-              orig_name: "input.png",
-              mime_type: "image/png",
-              is_stream: false
-            },
-
-            prompt,
-
-            negative_prompt,
-
-            duration,
-
-            8,
-
-            5,
-
-            "FlowMatchEulerDiscrete",
-
-            -1,
-
-            0
-          ]
-        })
-      }
+    const client = await Client.connect(
+      "kulkas2pintu/wan555"
     );
 
-    const result = await response.json();
+    const result = await client.predict(
+      "/generate_video",
+      [
+        handle_file(image), // input image
+        null,               // last image
+        prompt.trim(),      // prompt
+        4,                  // inference steps
+        "",                 // negative prompt
+        Number(duration),   // duration
+        1,                  // guidance scale
+        1,                  // guidance scale 2
+        42,                 // seed
+        true,               // randomize seed
+        5,                  // quality
+        "UniPCMultistep",   // scheduler
+        3,                  // flow shift
+        16,                 // frame multiplier
+        true,               // safe mode
+        true,               // display result
+        false               // final extra option
+      ]
+    );
 
-    if (!response.ok) {
-      console.error(result);
-
-      return res.status(response.status).json({
-        success: false,
-        error: result?.detail || result?.error || "Video API failed"
-      });
-    }
-
-    // Gradio response
     const video =
       result?.data?.[0]?.url ||
       result?.data?.[0]?.path ||
-      result?.data?.[0];
+      result?.data?.[1]?.url ||
+      result?.data?.[1]?.path;
+
+    if (!video) {
+      console.error("Unexpected HF response:", result);
+
+      throw new Error(
+        "Hugging Face did not return a video."
+      );
+    }
 
     return res.status(200).json({
       success: true,
-      video,
-      raw: result
+      video
     });
 
   } catch (error) {
-
-    console.error("VIDEO ERROR:", error);
+    console.error("Hugging Face video error:", error);
 
     return res.status(500).json({
       success: false,
-      error: error.message || "Video generation failed"
+      error:
+        error?.message ||
+        "Video generation failed."
     });
-
   }
 }
