@@ -1978,237 +1978,149 @@ $("generateStandard")
    IMAGE TO VIDEO
 ========================= */
 
-$("generateImageVideo")
-  .onclick =
-  async () => {
+$("generateImageVideo").onclick = async () => {
 
-    if(!uploadedImage){
+  if (!uploadedImage) {
+    return showStatus(
+      "error",
+      "Please upload an image first."
+    );
+  }
 
-      return showStatus(
-        "error",
-        "Please upload an image first."
+  const prompt =
+    $("motionPrompt").value.trim();
+
+  if (!prompt) {
+    return showStatus(
+      "error",
+      "Please describe how the image should move."
+    );
+  }
+
+  const button =
+    $("generateImageVideo");
+
+  button.disabled = true;
+
+  clearResult();
+
+  showStatus(
+    "loading",
+    "🎬 AI is generating your video... Please wait."
+  );
+
+  try {
+
+    const response =
+      await fetch(
+        "/api/generate-video",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body:
+            JSON.stringify({
+              image: uploadedImage,
+
+              prompt: prompt,
+
+              duration: Number(
+                $("imageVideoDuration").value
+              )
+            })
+        }
       );
 
-    }
-
-
-    const button =
-      $("generateImageVideo");
-
-    button.disabled =
-      true;
-
-
-    clearResult();
-
-
-    showStatus(
-      "loading",
-      "Uploading image and starting AI video..."
-    );
-
-
-    try{
-
-      let response =
-        await fetch(
-
-          "/api/generate-image-video",
-
-          {
-
-            method:"POST",
-
-            headers:{
-              "Content-Type":
-                "application/json"
-            },
-
-            body:
-              JSON.stringify({
-
-                image:
-                  uploadedImage,
-
-                mimeType:
-                  uploadedMime,
-
-                prompt:
-                  $("motionPrompt")
-                  .value
-                  .trim(),
-
-                duration:
-                  Number(
-                    $("imageVideoDuration")
-                    .value
-                  )
-
-              })
-
-          }
-
-        );
-
-
-      let data =
-        await response.json();
-
-
-      if(
-        !response.ok ||
-        !data.success
-      ){
-
-        throw new Error(
-
-          data.error ||
-          "Could not start Image to Video generation."
-
-        );
-
-      }
-
-
-      const projectId =
-        data.id;
-
-
-      /* CHECK STATUS */
-
-      for(
-        let i = 0;
-        i < 60;
-        i++
-      ){
-
-        await new Promise(
-          resolve =>
-            setTimeout(
-              resolve,
-              5000
-            )
-        );
-
-
-        showStatus(
-          "loading",
-          "Generating your Image Video..."
-        );
-
-
-        response =
-          await fetch(
-
-            "/api/generate-image-video?id=" +
-            encodeURIComponent(
-              projectId
-            )
-
-          );
-
-
-        data =
-          await response.json();
-
-
-        if(
-          !response.ok ||
-          !data.success
-        ){
-
-          throw new Error(
-
-            data.error ||
-            "Could not check generation."
-
-          );
-
-        }
-
-
-        if(
-          data.status === "complete" &&
-          data.url
-        ){
-
-          showResult(
-            data.url,
-            "video"
-          );
-
-
-          await saveGeneration({
-
-            type:
-              "imageVideo",
-
-            prompt:
-              $("motionPrompt")
-              .value,
-
-            status:
-              "Completed"
-
-          });
-
-
-          showStatus(
-            "success",
-            "Your Image Video is ready!"
-          );
-
-
-          button.disabled =
-            false;
-
-          return;
-
-        }
-
-
-        if(
-          data.status === "error" ||
-          data.status === "failed" ||
-          data.status === "canceled"
-        ){
-
-          throw new Error(
-
-            typeof data.error ===
-            "string"
-
-              ? data.error
-
-              : "Image Video generation failed."
-
-          );
-
-        }
-
-      }
-
+    const text =
+      await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch (e) {
+
+      console.error(
+        "Server returned:",
+        text
+      );
 
       throw new Error(
-        "Generation is taking longer than expected. Please try again later."
+        "Server returned an invalid response."
       );
-
-
-    }catch(error){
-
-      showStatus(
-        "error",
-        error.message
-      );
-
-    }finally{
-
-      button.disabled =
-        false;
-
     }
 
-  };
+    if (
+      !response.ok ||
+      !data.success
+    ) {
+
+      throw new Error(
+        data.error ||
+        "Video generation failed."
+      );
+    }
+
+    const videoUrl =
+      data.video;
+
+    if (!videoUrl) {
+
+      console.error(
+        "Unexpected API response:",
+        data
+      );
+
+      throw new Error(
+        "Video URL was not returned."
+      );
+    }
+
+    showResult(
+      videoUrl,
+      "video"
+    );
+
+    await saveGeneration({
+      type:
+        "imageVideo",
+
+      prompt:
+        prompt,
+
+      status:
+        "Completed"
+    });
+
+    showStatus(
+      "success",
+      "🎉 Your AI video is ready!"
+    );
+
+  } catch (error) {
+
+    console.error(
+      "Video error:",
+      error
+    );
+
+    showStatus(
+      "error",
+      error.message ||
+      "Video generation failed."
+    );
+
+  } finally {
+
+    button.disabled =
+      false;
+  }
+
+};
 
 
 /* =========================
