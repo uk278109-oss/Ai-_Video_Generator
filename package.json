@@ -1,8 +1,1 @@
-{
-  "name": "ai-video-generator",
-  "version": "1.0.0",
-  "type": "module",
-  "dependencies": {
-    "@gradio/client": "^1.20.0"
-  }
-}
+{"name":"ai-video-generator","version":"1.0.0","type":"module","dependencies":{}}
