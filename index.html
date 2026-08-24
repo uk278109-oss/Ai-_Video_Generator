@@ -1812,167 +1812,230 @@ function showResult(
    TEXT TO VIDEO / IMAGE
 ========================= */
 
-$("generateStandard")
-  .onclick =
-  async () => {
+$("generateStandard").onclick = async () => {
 
-    const prompt =
-      $("prompt")
-      .value
-      .trim();
+  const prompt =
+    $("standardPrompt").value.trim();
 
+  if (!prompt) {
+    showStatus(
+      "error",
+      "Please enter a video prompt."
+    );
+    return;
+  }
 
-    if(!prompt){
+  const button =
+    $("generateStandard");
 
-      return showStatus(
-        "error",
-        "Please describe what you want to create."
+  button.disabled = true;
+
+  clearResult();
+
+  showStatus(
+    "loading",
+    "🎬 Starting video generation..."
+  );
+
+  try {
+
+    // 1. Start JSON2Video render
+    const response =
+      await fetch(
+        "/api/generate-video",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json"
+          },
+
+          body: JSON.stringify({
+            prompt: prompt,
+            duration: 5
+          })
+        }
       );
 
+    const text =
+      await response.text();
+
+    let data;
+
+    try {
+      data = JSON.parse(text);
+    } catch {
+      console.error(
+        "Server response:",
+        text
+      );
+
+      throw new Error(
+        "Server returned an invalid response."
+      );
     }
 
+    if (
+      !response.ok ||
+      !data.success
+    ) {
+      throw new Error(
+        data.error ||
+        "Could not start video generation."
+      );
+    }
 
-    const button =
-      $("generateStandard");
+    const project =
+      data.project;
 
-    button.disabled = true;
+    if (!project) {
+      console.error(
+        "Unexpected response:",
+        data
+      );
 
-    clearResult();
+      throw new Error(
+        "Project ID was not returned."
+      );
+    }
 
+    // 2. Poll JSON2Video until ready
+    const maxAttempts = 60;
 
-    showStatus(
-      "loading",
-      currentMode === "video"
-        ? "Generating your AI video..."
-        : "Generating your AI image..."
-    );
+    for (
+      let attempt = 0;
+      attempt < maxAttempts;
+      attempt++
+    ) {
 
+      showStatus(
+        "loading",
+        "🎬 Generating video... " +
+        `(${attempt + 1}/${maxAttempts})`
+      );
 
-    try{
+      // Wait 5 seconds
+      await new Promise(
+        resolve =>
+          setTimeout(
+            resolve,
+            5000
+          )
+      );
 
-      const endpoint =
-        currentMode === "video"
-          ? "/api/generate-video"
-          : "/api/generate-image";
-
-
-      const response =
+      const statusResponse =
         await fetch(
-          endpoint,
-          {
-
-            method:"POST",
-
-            headers:{
-              "Content-Type":
-                "application/json"
-            },
-
-            body:
-              JSON.stringify({
-
-                prompt:
-
-                  prompt,
-
-                ratio:
-
-                  $("ratio")
-                  .value,
-
-                duration:
-
-                  Number(
-                    $("duration")
-                    .value
-                  )
-
-              })
-
-          }
+          "/api/generate-video?project=" +
+          encodeURIComponent(project)
         );
 
+      const statusText =
+        await statusResponse.text();
 
-      if(!response.ok){
+      let statusData;
 
-        let data = {};
+      try {
+        statusData =
+          JSON.parse(statusText);
+      } catch {
 
-        try{
-
-          data =
-            await response.json();
-
-        }catch(e){}
-
+        console.error(
+          "Status response:",
+          statusText
+        );
 
         throw new Error(
-
-          data.error ||
-          "Generation failed."
-
+          "Server returned an invalid status response."
         );
-
       }
 
+      if (
+        !statusResponse.ok ||
+        !statusData.success
+      ) {
+        throw new Error(
+          statusData.error ||
+          "Could not check video status."
+        );
+      }
 
-      let url;
+      const status =
+        String(
+          statusData.status || ""
+        ).toLowerCase();
 
-      if(currentMode === "video"){
-        const raw = await response.text();
-        let data;
-        try { data = JSON.parse(raw); }
-        catch { throw new Error("Video API returned an invalid response."); }
+      // Video ready
+      if (
+        status === "done" ||
+        status === "completed" ||
+        status === "complete" ||
+        status === "success"
+      ) {
 
-        if(!data.success){
-          throw new Error(data.error || "Video generation failed.");
+        if (!statusData.url) {
+          throw new Error(
+            "Video completed but no URL was returned."
+          );
         }
 
-        url = data.video_url || data.url;
-        if(!url) throw new Error("Video URL was not returned.");
-      } else {
-        const blob = await response.blob();
-        url = URL.createObjectURL(blob);
+        showResult(
+          statusData.url,
+          "video"
+        );
+
+        await saveGeneration({
+          type: "video",
+          prompt: prompt,
+          status: "Completed"
+        });
+
+        showStatus(
+          "success",
+          "🎉 Your video is ready!"
+        );
+
+        return;
       }
 
-      showResult(url, currentMode);
-
-
-      await saveGeneration({
-
-        type:
-          currentMode,
-
-        prompt:
-          prompt,
-
-        status:
-          "Completed"
-
-      });
-
-
-      showStatus(
-        "success",
-        "Your creation is ready!"
-      );
-
-
-    }catch(error){
-
-      showStatus(
-        "error",
-        error.message
-      );
-
-    }finally{
-
-      button.disabled =
-        false;
-
+      // Failed
+      if (
+        status === "error" ||
+        status === "failed" ||
+        status === "canceled" ||
+        status === "cancelled"
+      ) {
+        throw new Error(
+          statusData.error ||
+          "Video generation failed."
+        );
+      }
     }
 
-  };
+    throw new Error(
+      "Generation is taking longer than expected. Please try again later."
+    );
 
+  } catch (error) {
+
+    console.error(
+      "Video generation error:",
+      error
+    );
+
+    showStatus(
+      "error",
+      error.message ||
+      "Video generation failed."
+    );
+
+  } finally {
+
+    button.disabled = false;
+
+  }
+
+};
 
 /* =========================
    IMAGE TO VIDEO
