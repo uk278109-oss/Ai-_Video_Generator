@@ -2,11 +2,7 @@ export const config = {
   maxDuration: 60
 };
 
-const GPU_WORKER =
-  "https://point-posts-assigned-stronger.trycloudflare.com";
-
 export default async function handler(req, res) {
-
   if (req.method !== "POST") {
     res.setHeader("Allow", "POST");
 
@@ -17,7 +13,6 @@ export default async function handler(req, res) {
   }
 
   try {
-
     const { prompt } = req.body || {};
 
     if (
@@ -30,8 +25,36 @@ export default async function handler(req, res) {
       });
     }
 
+    if (prompt.length > 1000) {
+      return res.status(400).json({
+        success: false,
+        error: "Prompt is too long."
+      });
+    }
+
+    /*
+      VIDEO PROVIDER
+
+      GPU_WORKER_URL ko Vercel Environment Variables
+      mein set kiya jayega.
+
+      Example:
+      https://your-video-worker.example.com
+    */
+
+    const workerUrl =
+      process.env.GPU_WORKER_URL;
+
+    if (!workerUrl) {
+      return res.status(503).json({
+        success: false,
+        error:
+          "Video GPU is not connected yet."
+      });
+    }
+
     const response = await fetch(
-      `${GPU_WORKER}/generate`,
+      `${workerUrl}/generate`,
       {
         method: "POST",
 
@@ -46,57 +69,71 @@ export default async function handler(req, res) {
       }
     );
 
-    const data =
-      await response.json();
+    const raw =
+      await response.text();
 
-    if (!response.ok) {
+    let data;
 
-      return res.status(
-        response.status
-      ).json({
-        success: false,
-        error:
-          data?.detail ||
-          data?.error ||
-          "Video generation failed."
-      });
+    try {
+      data = JSON.parse(raw);
+    } catch {
+      throw new Error(
+        "Video worker returned an invalid response."
+      );
     }
 
-    if (
-      !data?.success ||
-      !data?.video_file
-    ) {
-      return res.status(500).json({
-        success: false,
-        error:
-          "Invalid response from GPU worker."
-      });
+    if (!response.ok) {
+      throw new Error(
+        data?.error ||
+        data?.detail ||
+        "Video generation failed."
+      );
+    }
+
+    /*
+      Worker should return:
+
+      {
+        "success": true,
+        "video_url": "https://..."
+      }
+
+      OR:
+
+      {
+        "video": "/video/..."
+      }
+    */
+
+    const videoUrl =
+      data.video_url ||
+      data.url ||
+      data.video;
+
+    if (!videoUrl) {
+      throw new Error(
+        "Video URL was not returned."
+      );
     }
 
     return res.status(200).json({
       success: true,
-
-      video_url:
-        `${GPU_WORKER}/video/${encodeURIComponent(
-          data.video_file
-        )}`,
-
-      filename:
-        data.video_file
+      video_url: videoUrl
     });
 
   } catch (error) {
 
     console.error(
-      "GPU Worker Error:",
+      "Video generation error:",
       error
     );
 
     return res.status(500).json({
       success: false,
+
       error:
         error?.message ||
-        "Could not connect to GPU worker."
+        "Video generation failed."
     });
   }
-}
+      }
