@@ -1,64 +1,105 @@
-import { InferenceClient } from "@huggingface/inference";
-
-export const config = {
-  maxDuration: 60
-};
-
 export default async function handler(req, res) {
+  // Only POST requests allowed
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST");
     return res.status(405).json({
       success: false,
-      error: "Method not allowed."
+      error: "Method not allowed"
     });
   }
 
   try {
-    const { prompt } = req.body || {};
+    const {
+      image,
+      prompt,
+      negative_prompt = "",
+      duration = 3.5
+    } = req.body;
 
-    if (!prompt || typeof prompt !== "string") {
+    if (!image) {
       return res.status(400).json({
         success: false,
-        error: "Please enter a video prompt."
+        error: "Please provide an image"
       });
     }
 
-    if (!process.env.HF_TOKEN) {
-      return res.status(500).json({
+    if (!prompt) {
+      return res.status(400).json({
         success: false,
-        error: "HF_TOKEN is not configured."
+        error: "Please provide a prompt"
       });
     }
 
-    const client = new InferenceClient(
-      process.env.HF_TOKEN
+    // Hugging Face Wan 2.2 Video API
+    const response = await fetch(
+      "https://kulkas2pintu-wan555.hf.space/run/generate_video",
+      {
+        method: "POST",
+
+        headers: {
+          "Content-Type": "application/json"
+        },
+
+        body: JSON.stringify({
+          data: [
+            {
+              path: image,
+              url: image,
+              orig_name: "input.png",
+              mime_type: "image/png",
+              is_stream: false
+            },
+
+            prompt,
+
+            negative_prompt,
+
+            duration,
+
+            8,
+
+            5,
+
+            "FlowMatchEulerDiscrete",
+
+            -1,
+
+            0
+          ]
+        })
+      }
     );
 
-    const video = await client.textToVideo({
-      model: "Wan-AI/Wan2.2-TI2V-5B",
-      inputs: prompt.trim()
+    const result = await response.json();
+
+    if (!response.ok) {
+      console.error(result);
+
+      return res.status(response.status).json({
+        success: false,
+        error: result?.detail || result?.error || "Video API failed"
+      });
+    }
+
+    // Gradio response
+    const video =
+      result?.data?.[0]?.url ||
+      result?.data?.[0]?.path ||
+      result?.data?.[0];
+
+    return res.status(200).json({
+      success: true,
+      video,
+      raw: result
     });
 
-    const buffer = Buffer.from(
-      await video.arrayBuffer()
-    );
-
-    res.setHeader("Content-Type", "video/mp4");
-    res.setHeader(
-      "Content-Length",
-      buffer.length
-    );
-
-    return res.status(200).send(buffer);
-
   } catch (error) {
-    console.error("Video error:", error);
+
+    console.error("VIDEO ERROR:", error);
 
     return res.status(500).json({
       success: false,
-      error:
-        error?.message ||
-        "Video generation failed."
+      error: error.message || "Video generation failed"
     });
+
   }
-      }
+}
