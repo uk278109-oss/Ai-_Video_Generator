@@ -1,322 +1,111 @@
-export const config = {
-  maxDuration: 60
-};
-
-const API = "https://api.magichour.ai";
-
-function getError(data, fallback) {
-  if (typeof data?.error === "string") return data.error;
-
-  return (
-    data?.error?.message ||
-    data?.message ||
-    fallback
-  );
-}
+const API_URL = "https://api.aimlapi.com/v2/video/generations";
 
 export default async function handler(req, res) {
-  const apiKey = process.env.Mgh_API;
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (!apiKey) {
-    return res.status(500).json({
-      success: false,
-      error: "Mgh_API is not configured."
-    });
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
   }
 
-  // =========================
-  // CHECK VIDEO STATUS
-  // =========================
-  if (req.method === "GET") {
-    try {
-      const id = String(req.query?.id || "").trim();
-
-      if (!id) {
-        return res.status(400).json({
-          success: false,
-          error: "Missing project id."
-        });
-      }
-
-      const response = await fetch(
-        `${API}/v1/video-projects/${encodeURIComponent(id)}`,
-        {
-          headers: {
-            Authorization: `Bearer ${apiKey}`,
-            Accept: "application/json"
-          }
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        return res.status(response.status).json({
-          success: false,
-          error: getError(
-            data,
-            "Could not check video status."
-          )
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        id: data.id,
-        status: data.status,
-        url: data?.downloads?.[0]?.url || null,
-        error: data?.error || null
-      });
-
-    } catch (error) {
-      console.error(
-        "Image-to-video status error:",
-        error
-      );
-
-      return res.status(500).json({
-        success: false,
-        error:
-          error?.message ||
-          "Could not check video status."
-      });
-    }
-  }
-
-  // =========================
-  // ONLY POST ALLOWED
-  // =========================
   if (req.method !== "POST") {
-    res.setHeader("Allow", "POST, GET");
-
     return res.status(405).json({
       success: false,
       error: "Method not allowed."
     });
   }
 
+  const apiKey = process.env.AIMLAPI_KEY;
+
+  if (!apiKey) {
+    return res.status(500).json({
+      success: false,
+      error: "AIMLAPI_KEY is not configured."
+    });
+  }
+
   try {
     const {
       image,
-      mimeType,
-      prompt = "",
+      image_url,
+      prompt,
       duration = 5
     } = req.body || {};
 
-    // =========================
-    // VALIDATE IMAGE
-    // =========================
-    if (
-      typeof image !== "string" ||
-      !image.startsWith("data:image/")
-    ) {
+    const finalImage =
+      image_url || image;
+
+    if (!finalImage) {
       return res.status(400).json({
         success: false,
-        error: "Please upload a valid image."
+        error: "Image is required."
       });
     }
 
-    const match = image.match(
-      /^data:(image\/[a-zA-Z0-9.+-]+);base64,(.+)$/
-    );
-
-    if (!match) {
+    if (!prompt || !String(prompt).trim()) {
       return res.status(400).json({
         success: false,
-        error: "Invalid image data."
+        error: "Motion prompt is required."
       });
     }
 
-    const contentType = mimeType || match[1];
+    let finalDuration =
+      Number(duration);
 
-    const extensionMap = {
-      "image/png": "png",
-      "image/jpeg": "jpg",
-      "image/jpg": "jpg",
-      "image/webp": "webp"
+    if (![5, 10, 15].includes(finalDuration)) {
+      finalDuration = 5;
+    }
+
+    const payload = {
+      model: "alibaba/wan-2-6-i2v",
+      prompt: String(prompt).trim(),
+      image_url: finalImage,
+      duration: finalDuration,
+      resolution: "720p"
     };
 
-    const extension =
-      extensionMap[contentType] || "png";
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
 
-    const imageBuffer = Buffer.from(
-      match[2],
-      "base64"
-    );
+    const data = await response.json();
 
-    // =========================
-    // IMAGE SIZE LIMIT
-    // =========================
-    if (imageBuffer.length > 10 * 1024 * 1024) {
-      return res.status(413).json({
+    if (!response.ok) {
+      return res.status(response.status).json({
         success: false,
         error:
-          "Image is too large. Please use an image under 10 MB."
+          data?.error?.message ||
+          data?.message ||
+          "Could not start image-to-video generation.",
+        details: data
       });
     }
 
-    // =========================
-    // STEP 1: GET UPLOAD URL
-    // =========================
-    const uploadResponse = await fetch(
-      `${API}/v1/files/upload-urls`,
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-          items: [
-            {
-              type: "image",
-              extension
-            }
-          ]
-        })
-      }
-    );
-
-    const uploadData =
-      await uploadResponse.json();
-
-    if (!uploadResponse.ok) {
-      return res.status(
-        uploadResponse.status
-      ).json({
-        success: false,
-        error: getError(
-          uploadData,
-          "Could not prepare image upload."
-        )
-      });
-    }
-
-    const uploadItem =
-      uploadData?.items?.[0];
-
-    if (
-      !uploadItem?.upload_url ||
-      !uploadItem?.file_path
-    ) {
-      return res.status(500).json({
-        success: false,
-        error:
-          "Magic Hour did not return an upload location."
-      });
-    }
-
-    // =========================
-    // STEP 2: UPLOAD IMAGE
-    // =========================
-    const putResponse = await fetch(
-      uploadItem.upload_url,
-      {
-        method: "PUT",
-
-        headers: {
-          "Content-Type": contentType
-        },
-
-        body: imageBuffer
-      }
-    );
-
-    if (!putResponse.ok) {
-      return res.status(502).json({
-        success: false,
-        error:
-          "Image upload to Magic Hour failed."
-      });
-    }
-
-    // =========================
-    // STEP 3: CREATE VIDEO JOB
-    // =========================
-    const safeDuration = Math.min(
-      Math.max(Number(duration) || 5, 1),
-      10
-    );
-
-    const createResponse = await fetch(
-      `${API}/v1/image-to-video`,
-      {
-        method: "POST",
-
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: "application/json",
-          "Content-Type": "application/json"
-        },
-
-        body: JSON.stringify({
-          name: `First AI Image Video ${Date.now()}`,
-
-          end_seconds: safeDuration,
-
-          model: "ltx-2.3",
-
-          resolution: "480p",
-
-          audio: false,
-
-          style: {
-            prompt:
-              String(prompt).trim() ||
-              "Natural smooth cinematic motion, realistic movement, high quality"
-          },
-
-          assets: {
-            image_file_path:
-              uploadItem.file_path
-          }
-        })
-      }
-    );
-
-    const createData =
-      await createResponse.json();
-
-    if (
-      !createResponse.ok ||
-      !createData?.id
-    ) {
-      return res.status(
-        createResponse.status || 500
-      ).json({
-        success: false,
-        error: getError(
-          createData,
-          "Could not create Image to Video job."
-        )
-      });
-    }
-
-    // =========================
-    // SUCCESS
-    // =========================
     return res.status(200).json({
       success: true,
-      id: createData.id,
-      status: createData.status || "queued",
-      credits_charged:
-        createData.credits_charged ?? null
+      taskId: data.id,
+      project: data.id,
+      status: data.status || "queued",
+      video: data?.video?.url || null
     });
 
   } catch (error) {
     console.error(
-      "Image-to-video error:",
+      "AIMLAPI image-to-video error:",
       error
     );
 
     return res.status(500).json({
       success: false,
       error:
-        error?.message ||
-        "Image to Video generation failed."
+        error.message ||
+        "Image-to-video generation failed."
     });
   }
-}
+        }
