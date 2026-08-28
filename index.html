@@ -901,246 +901,383 @@ select option{
 <section class="createCard card">
 
 
-<!-- =========================
-     TEXT VIDEO / IMAGE
-========================= -->
+/* =========================
+   TEXT TO VIDEO / IMAGE
+========================= */
+
+async function pollGeneration(taskId, type, prompt, button){
+
+  const maxAttempts = 80;
+
+  for(let attempt = 0; attempt < maxAttempts; attempt++){
+
+    showStatus(
+      "loading",
+      `🎬 Generating... (${attempt + 1}/${maxAttempts})`
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
-<div id="standardForm">
-
-<div class="sectionTitle">
-
-  <span id="formTitle">
-    Describe your video
-  </span>
-
-  <small id="count">
-    0 / 1000
-  </small>
-
-</div>
-
-
-<textarea
-  id="prompt"
-  maxlength="1000"
-  placeholder="A cinematic futuristic city at night, neon lights reflecting on the streets..."
-></textarea>
-
-
-<button
-  class="enhanceBtn"
-  id="enhanceBtn"
->
-  ✨ Enhance Prompt
-</button>
-
-
-<div class="options">
-
-<div class="option">
-
-<label>
-  ASPECT RATIO
-</label>
-
-<select id="ratio">
-
-<option value="16:9">
-16:9 Landscape
-</option>
-
-<option value="9:16">
-9:16 Portrait
-</option>
-
-<option value="1:1">
-1:1 Square
-</option>
-
-</select>
-
-</div>
-
-
-<div
-  class="option"
-  id="durationOption"
->
-
-<label>
-  DURATION
-</label>
-
-<select id="duration">
-
-<option value="3">
-3 seconds
-</option>
-
-<option
-  value="5"
-  selected
->
-5 seconds
-</option>
-
-<option value="8">
-8 seconds
-</option>
-
-<option value="10">
-10 seconds
-</option>
-
-</select>
-
-</div>
-
-</div>
-
-
-<button
-  class="generateBtn"
-  id="generateStandard"
->
-  ✨ Generate Video
-</button>
-
-</div>
-
-
-<!-- =========================
-     IMAGE TO VIDEO
-========================= -->
-
-<div
-  id="imageVideoForm"
-  style="display:none"
->
-
-
-<div class="sectionTitle">
-
-<span>
-  Upload your image
-</span>
-
-<small>
-  Max 4 MB
-</small>
-
-</div>
-
-
-<div class="uploadBox">
-
-<label
-  class="uploadLabel"
-  for="imageFile"
->
-
-<div class="uploadIcon">
-  🖼️
-</div>
-
-<h3>
-  Choose an image
-</h3>
-
-<p>
-  PNG, JPG or WEBP
-</p>
-
-</label>
-
-<input
-  id="imageFile"
-  type="file"
-  accept="image/png,image/jpeg,image/webp"
-/>
-
-</div>
-
-
-<img
-  id="imagePreview"
-  class="previewImage"
-/>
-
-
-<div class="sectionTitle">
-
-<span>
-  Describe the motion
-</span>
-
-<small>
-  Optional
-</small>
-
-</div>
-
-
-<textarea
-  id="motionPrompt"
-  placeholder="The subject gently moves, natural realistic motion, cinematic camera movement..."
-></textarea>
-
-
-<div class="option">
-
-<label>
-VIDEO DURATION
-</label>
-
-<select id="imageVideoDuration">
-
-<option value="3">
-3 seconds
-</option>
-
-<option
-  value="5"
-  selected
->
-5 seconds
-</option>
-
-<option value="8">
-8 seconds
-</option>
-
-<option value="10">
-10 seconds
-</option>
-
-</select>
-
-</div>
-
-
-<button
-  class="generateBtn"
-  id="generateImageVideo"
->
-  ✨ Generate Image Video
-</button>
-
-
-<p
-  style="
-    color:var(--muted);
-    font-size:12px;
-    line-height:1.5;
-    margin-bottom:0;
-  "
->
-  Upload an image and First AI will create
-  a moving AI video.
-</p>
-
-</div>
-
+    const response = await fetch(
+      "/api/status?generation_id=" +
+      encodeURIComponent(taskId)
+    );
+
+    const raw = await response.text();
+
+    let data;
+
+    try{
+      data = JSON.parse(raw);
+    }catch{
+      throw new Error("Invalid status response.");
+    }
+
+    if(!response.ok || !data.success){
+      throw new Error(
+        data.error || "Could not check generation status."
+      );
+    }
+
+    const status = String(
+      data.status || ""
+    ).toLowerCase();
+
+    if(
+      status === "completed" ||
+      status === "complete" ||
+      status === "done" ||
+      status === "success"
+    ){
+
+      if(!data.url){
+        throw new Error(
+          "Generation completed but no result URL was returned."
+        );
+      }
+
+      showResult(
+        data.url,
+        type === "image" ? "image" : "video"
+      );
+
+      await saveGeneration({
+        type: type,
+        prompt: prompt,
+        status: "Completed"
+      });
+
+      showStatus(
+        "success",
+        "🎉 Your creation is ready!"
+      );
+
+      return;
+    }
+
+    if(
+      status === "failed" ||
+      status === "error" ||
+      status === "cancelled" ||
+      status === "canceled"
+    ){
+      throw new Error(
+        data.error || "Generation failed."
+      );
+    }
+  }
+
+  throw new Error(
+    "Generation is taking longer than expected. Please try again later."
+  );
+}
+
+
+$("generateStandard").onclick = async () => {
+
+  const prompt = $("prompt").value.trim();
+
+  if(!prompt){
+    return showStatus(
+      "error",
+      currentMode === "image"
+        ? "Please enter an image prompt."
+        : "Please enter a video prompt."
+    );
+  }
+
+  const button = $("generateStandard");
+
+  button.disabled = true;
+
+  clearResult();
+
+  try{
+
+    if(currentMode === "image"){
+
+      showStatus(
+        "loading",
+        "🖼️ Generating AI image..."
+      );
+
+      const response = await fetch(
+        "/api/generate-image",
+        {
+          method:"POST",
+
+          headers:{
+            "Content-Type":"application/json"
+          },
+
+          body:JSON.stringify({
+            prompt:prompt,
+            ratio:$("ratio").value
+          })
+        }
+      );
+
+      const raw = await response.text();
+
+      let data;
+
+      try{
+        data = JSON.parse(raw);
+      }catch{
+        throw new Error(
+          "Server returned an invalid response."
+        );
+      }
+
+      if(!response.ok || !data.success){
+        throw new Error(
+          data.error || "Image generation failed."
+        );
+      }
+
+      const imageUrl =
+        data.url ||
+        data.image ||
+        data.imageUrl;
+
+      if(!imageUrl){
+        throw new Error(
+          "Image URL was not returned."
+        );
+      }
+
+      showResult(imageUrl, "image");
+
+      await saveGeneration({
+        type:"image",
+        prompt:prompt,
+        status:"Completed"
+      });
+
+      showStatus(
+        "success",
+        "🎉 Your AI image is ready!"
+      );
+
+      return;
+    }
+
+
+    showStatus(
+      "loading",
+      "🎬 Starting AI video generation..."
+    );
+
+    const response = await fetch(
+      "/api/generate-video",
+      {
+        method:"POST",
+
+        headers:{
+          "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+          prompt:prompt,
+          duration:Number(
+            $("duration").value
+          ),
+          ratio:$("ratio").value
+        })
+      }
+    );
+
+    const raw = await response.text();
+
+    let data;
+
+    try{
+      data = JSON.parse(raw);
+    }catch{
+      throw new Error(
+        "Server returned an invalid response."
+      );
+    }
+
+    if(!response.ok || !data.success){
+      throw new Error(
+        data.error ||
+        "Could not start video generation."
+      );
+    }
+
+    const taskId =
+      data.taskId ||
+      data.project ||
+      data.id;
+
+    if(!taskId){
+      throw new Error(
+        "Generation ID was not returned."
+      );
+    }
+
+    await pollGeneration(
+      taskId,
+      "video",
+      prompt,
+      button
+    );
+
+  }catch(error){
+
+    console.error(
+      "Generation error:",
+      error
+    );
+
+    showStatus(
+      "error",
+      error.message ||
+      "Generation failed."
+    );
+
+  }finally{
+
+    button.disabled = false;
+
+  }
+
+};
+
+/* =========================
+   IMAGE TO VIDEO
+========================= */
+
+$("generateImageVideo").onclick = async () => {
+
+  if(!uploadedImage){
+    return showStatus(
+      "error",
+      "Please upload an image first."
+    );
+  }
+
+  const prompt =
+    $("motionPrompt").value.trim();
+
+  if(!prompt){
+    return showStatus(
+      "error",
+      "Please describe how the image should move."
+    );
+  }
+
+  const button =
+    $("generateImageVideo");
+
+  button.disabled = true;
+
+  clearResult();
+
+  showStatus(
+    "loading",
+    "🎬 Starting image-to-video generation..."
+  );
+
+  try{
+
+    const response = await fetch(
+      "/api/generate-image-video",
+      {
+        method:"POST",
+
+        headers:{
+          "Content-Type":"application/json"
+        },
+
+        body:JSON.stringify({
+          image:uploadedImage,
+          prompt:prompt,
+          duration:Number(
+            $("imageVideoDuration").value
+          )
+        })
+      }
+    );
+
+    const raw = await response.text();
+
+    let data;
+
+    try{
+      data = JSON.parse(raw);
+    }catch{
+      throw new Error(
+        "Server returned an invalid response."
+      );
+    }
+
+    if(!response.ok || !data.success){
+      throw new Error(
+        data.error ||
+        "Could not start image-to-video generation."
+      );
+    }
+
+    const taskId =
+      data.taskId ||
+      data.project ||
+      data.id;
+
+    if(!taskId){
+      throw new Error(
+        "Generation ID was not returned."
+      );
+    }
+
+    await pollGeneration(
+      taskId,
+      "imageVideo",
+      prompt,
+      button
+    );
+
+  }catch(error){
+
+    console.error(
+      "Image-to-video error:",
+      error
+    );
+
+    showStatus(
+      "error",
+      error.message ||
+      "Video generation failed."
+    );
+
+  }finally{
+
+    button.disabled = false;
+
+  }
+
+};
 
 <!-- STATUS -->
 
@@ -2504,8 +2641,8 @@ auth.signInAnonymously()
   .catch((error) => {
     console.error("Firebase Anonymous Auth Error:", error);
 
-    status(
-      "error",
+    showStatus(
+  "error",
       "Firebase error: " +
       error.code +
       " — " +
