@@ -1,98 +1,47 @@
-export default async function handler(req, res) {
-  const API_KEY = process.env.JSON2VIDEO_API_KEY;
+const API_URL = "https://api.aimlapi.com/v2/video/generations";
 
-  if (!API_KEY) {
-    return res.status(500).json({
+function send(res, status, data) {
+  res.status(status).json(data);
+}
+
+export default async function handler(req, res) {
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  const apiKey = process.env.AIMLAPI_KEY;
+
+  if (!apiKey) {
+    return send(res, 500, {
       success: false,
-      error: "JSON2VIDEO_API_KEY is not configured."
+      error: "AIMLAPI_KEY is not configured."
     });
   }
 
-  const headers = {
-    "x-api-key": API_KEY,
-    "Content-Type": "application/json"
-  };
-
   try {
-    // CREATE VIDEO JOB
-    if (req.method === "POST") {
-      const { prompt, duration = 5 } = req.body || {};
-
-      if (!prompt || !prompt.trim()) {
-        return res.status(400).json({
-          success: false,
-          error: "Please enter a video prompt."
-        });
-      }
-
-      const seconds = Math.max(
-        3,
-        Math.min(Number(duration) || 5, 20)
-      );
-
-      const movie = {
-        resolution: "hd",
-        quality: "medium",
-        scenes: [
-          {
-            duration: seconds,
-            elements: [
-              {
-                type: "text",
-                text: prompt.trim(),
-                duration: seconds,
-                style: "001"
-              }
-            ]
-          }
-        ]
-      };
-
-      const response = await fetch(
-        "https://api.json2video.com/v2/movies",
-        {
-          method: "POST",
-          headers,
-          body: JSON.stringify(movie)
-        }
-      );
-
-      const data = await response.json();
-
-      if (!response.ok || !data.success) {
-        return res.status(response.status || 500).json({
-          success: false,
-          error:
-            data.message ||
-            data.error ||
-            "Could not start video generation."
-        });
-      }
-
-      return res.status(200).json({
-        success: true,
-        project: data.project,
-        status: "queued"
-      });
-    }
-
-    // CHECK VIDEO STATUS
+    /* CHECK VIDEO STATUS */
     if (req.method === "GET") {
-      const project = req.query.project;
+      const generationId =
+        req.query?.generation_id ||
+        req.query?.project ||
+        req.query?.taskId;
 
-      if (!project) {
-        return res.status(400).json({
+      if (!generationId) {
+        return send(res, 400, {
           success: false,
-          error: "Missing project ID."
+          error: "generation_id is required."
         });
       }
 
       const response = await fetch(
-        "https://api.json2video.com/v2/movies?project=" +
-          encodeURIComponent(project),
+        `${API_URL}?generation_id=${encodeURIComponent(generationId)}`,
         {
           headers: {
-            "x-api-key": API_KEY
+            Authorization: `Bearer ${apiKey}`
           }
         }
       );
@@ -100,40 +49,95 @@ export default async function handler(req, res) {
       const data = await response.json();
 
       if (!response.ok) {
-        return res.status(response.status).json({
+        return send(res, response.status, {
           success: false,
           error:
-            data.message ||
-            data.error ||
+            data?.error?.message ||
+            data?.message ||
             "Could not check video status."
         });
       }
 
-      const movie = data.movie || {};
-
-      return res.status(200).json({
+      return send(res, 200, {
         success: true,
-        status: movie.status,
-        url: movie.url || null,
-        error: movie.message || null
+        id: data.id,
+        status: data.status,
+        url: data?.video?.url || null,
+        error:
+          data?.error?.message ||
+          null
       });
     }
 
-    res.setHeader("Allow", "POST, GET");
+    /* CREATE TEXT TO VIDEO */
+    if (req.method !== "POST") {
+      return send(res, 405, {
+        success: false,
+        error: "Method not allowed."
+      });
+    }
 
-    return res.status(405).json({
-      success: false,
-      error: "Method not allowed."
+    const {
+      prompt,
+      duration = 5
+    } = req.body || {};
+
+    if (!prompt || !String(prompt).trim()) {
+      return send(res, 400, {
+        success: false,
+        error: "Prompt is required."
+      });
+    }
+
+    /*
+      AIMLAPI Text → Video model.
+      Change this model later from the frontend/backend
+      if you want another supported provider/model.
+    */
+    const payload = {
+      model: "video-01",
+      prompt: String(prompt).trim(),
+      enhance_prompt: true
+    };
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      return send(res, response.status, {
+        success: false,
+        error:
+          data?.error?.message ||
+          data?.message ||
+          "Could not start video generation.",
+        details: data
+      });
+    }
+
+    return send(res, 200, {
+      success: true,
+      project: data.id,
+      taskId: data.id,
+      status: data.status || "queued",
+      url: data?.video?.url || null
     });
 
   } catch (error) {
-    console.error("JSON2Video error:", error);
+    console.error("AIMLAPI video error:", error);
 
-    return res.status(500).json({
+    return send(res, 500, {
       success: false,
       error:
         error.message ||
         "Video generation failed."
     });
   }
-            }
+          }
