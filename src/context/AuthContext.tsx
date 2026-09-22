@@ -31,7 +31,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     loading,
     firebaseConfigured,
     signOutUser: async () => {
-      if (auth) await import("firebase/auth").then(({ signOut }) => signOut(auth));
+      const currentAuth = auth;
+      if (currentAuth) await import("firebase/auth").then(({ signOut }) => signOut(currentAuth));
     },
   }), [user, loading]);
 
@@ -42,4 +43,4 @@ export function useAuth() {
   const value = useContext(AuthContext);
   if (!value) throw new Error("useAuth must be used inside AuthProvider");
   return value;
-}
+    }
