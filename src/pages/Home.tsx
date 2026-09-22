@@ -45,4 +45,4 @@ export default function Home({ onOpenMenu }: HomeProps) {
 
     <section className="chat-section"><ChatInput onSend={handleSend}/><div className="bottom-placeholder"><span>WORLD AI • Your workspace</span></div></section>
   </div>;
-    }
+}
