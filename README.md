@@ -1,89 +1,44 @@
-# WORLD AI — Phase 2
+# WORLD AI
 
-Phase 2 adds a real account layer and persistent user workspace on top of Phase 1.
+WORLD AI is a React + TypeScript + Vite PWA foundation with Firebase authentication and Firestore-backed chat/memory data.
 
-## Included
+## Included in this build
 
-- Firebase Email/Password sign up and login
-- Persistent Firebase auth session
-- Logout
-- Per-user Firestore profile
-- Per-user chat list with create / rename / delete
-- Per-user Memory collection
-- Memory enable/disable control
-- Delete one memory / clear all memories
-- Light / Dark / System appearance
-- Persistent per-user appearance preference
-- Responsive settings panel
-- Responsive mobile sidebar
-- Search chats
-- PWA foundation retained from Phase 1
-- Firestore security rules scoped to the authenticated user's UID
+- WORLD AI splash screen and app shell
+- Email/password sign in
+- Google sign in
+- Forgot password
+- Multi-step account creation: display name, email, password, age, category and AI interests
+- Connected sidebar navigation for Home, Images, Library, Projects, Scheduled, Tools, Code Builder, Voice AI and Pro
+- Account center
+- Settings with compact White / Black / WORLD themes
+- Memory controls
+- Chat history create/rename/delete foundation
+- PWA manifest, service worker generation and install prompt handling
+- Real PNG PWA icons
 
-This is intentionally **not a 1:1 ChatGPT copy**. WORLD AI keeps its own branding and UI while using familiar AI-workspace patterns.
+## Pro status
 
-## 1. Create Firebase project
+The Pro plan in this build is a **product placeholder**. No payment, subscription or billing is active. The UI is ready for a future billing/backend phase.
 
-In Firebase Console:
+## AI API status
 
-1. Create a project.
-2. Add a Web App.
-3. Enable **Authentication → Sign-in method → Email/Password**.
-4. Create a **Cloud Firestore** database.
-5. Publish `firestore.rules`.
-6. Copy the Web App config values.
+Gemini, Grok/xAI and open-source model APIs are **not connected yet**. The next AI phase should put provider keys behind server-side routes and an AI router. Never put provider secret keys in client-side React code.
 
-## 2. Configure local environment
-
-Copy `.env.example` to `.env` and fill the six Firebase values:
-
-```env
-VITE_FIREBASE_API_KEY=...
-VITE_FIREBASE_AUTH_DOMAIN=...
-VITE_FIREBASE_PROJECT_ID=...
-VITE_FIREBASE_STORAGE_BUCKET=...
-VITE_FIREBASE_MESSAGING_SENDER_ID=...
-VITE_FIREBASE_APP_ID=...
-```
-
-Do not put Firebase Admin/service-account private keys in this frontend project.
-
-## 3. Install and run
+## Build
 
 ```bash
 npm install
+npm run build
 npm run dev
 ```
 
-Production:
+Deploy with Vercel as a Vite project:
 
-```bash
-npm run build
-npm run preview
-```
+- Framework Preset: Vite
+- Build Command: `npm run build`
+- Output Directory: `dist`
+- Install Command: `npm install`
+- Root Directory: `./`
 
-## 4. Firestore data shape
-
-```text
-users/{uid}
-  displayName
-  email
-  createdAt
-  memoryEnabled
-
-users/{uid}/memories/{memoryId}
-  text
-  createdAt
-
-users/{uid}/chats/{chatId}
-  title
-  createdAt
-  updatedAt
-
-users/{uid}/chats/{chatId}/messages/{messageId}
-  role
-  content
-  createdAt
-```
-
-Phase 2 deliberately does not put Gemini/Grok/API secrets in the browser. AI provider calls should be added through secure server-side routes in Phase 3.
+For PWA installation, use HTTPS (Vercel provides this) and a browser that supports the install prompt. The Install App button uses the browser's `beforeinstallprompt` event when available.
