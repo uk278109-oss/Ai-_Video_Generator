@@ -1,44 +1,34 @@
 # WORLD AI
 
-WORLD AI is a React + TypeScript + Vite PWA foundation with Firebase authentication and Firestore-backed chat/memory data.
+Coding-first AI PWA built with React + TypeScript + Vite + Firebase.
 
-## Included in this build
+## Current live features
+- Firebase email/password + Google sign-in
+- Password reset
+- Account/profile navigation
+- Chat UI with real server-side Gemini/Grok responses
+- Coding workspace
+- Gemini image generation workspace
+- White / Black / WORLD themes
+- PWA manifest + service worker + install prompt handling
+- Mobile standalone layout
 
-- WORLD AI splash screen and app shell
-- Email/password sign in
-- Google sign in
-- Forgot password
-- Multi-step account creation: display name, email, password, age, category and AI interests
-- Connected sidebar navigation for Home, Images, Library, Projects, Scheduled, Tools, Code Builder, Voice AI and Pro
-- Account center
-- Settings with compact White / Black / WORLD themes
-- Memory controls
-- Chat history create/rename/delete foundation
-- PWA manifest, service worker generation and install prompt handling
-- Real PNG PWA icons
+## Vercel environment variables
+Add these in Vercel Project Settings → Environment Variables. Do not put provider secrets in `VITE_*` variables.
 
-## Pro status
-
-The Pro plan in this build is a **product placeholder**. No payment, subscription or billing is active. The UI is ready for a future billing/backend phase.
-
-## AI API status
-
-Gemini, Grok/xAI and open-source model APIs are **not connected yet**. The next AI phase should put provider keys behind server-side routes and an AI router. Never put provider secret keys in client-side React code.
-
-## Build
-
-```bash
-npm install
-npm run build
-npm run dev
+```text
+GEMINI_API_KEY=...
+XAI_API_KEY=...
 ```
 
-Deploy with Vercel as a Vite project:
+Optional model overrides:
+```text
+GEMINI_TEXT_MODEL=gemini-3.8-flash
+GEMINI_IMAGE_MODEL=gemini-3.1-flash-image
+XAI_TEXT_MODEL=grok-4.7
+```
 
-- Framework Preset: Vite
-- Build Command: `npm run build`
-- Output Directory: `dist`
-- Install Command: `npm install`
-- Root Directory: `./`
+After changing environment variables, redeploy the project.
 
-For PWA installation, use HTTPS (Vercel provides this) and a browser that supports the install prompt. The Install App button uses the browser's `beforeinstallprompt` event when available.
+## Notes
+The `/api/chat` and `/api/image` Vercel functions keep provider keys on the server. For production Pro billing and robust per-user quotas, add server-side Firebase token verification before opening paid endpoints to public traffic.
