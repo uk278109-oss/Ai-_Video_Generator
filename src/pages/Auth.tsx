@@ -1,104 +1,31 @@
 import { useState } from "react";
-import { Eye, EyeOff, LockKeyhole, Mail, Sparkles, UserRound } from "lucide-react";
-import { createUserWithEmailAndPassword, sendPasswordResetEmail, signInWithEmailAndPassword, updateProfile } from "firebase/auth";
+import { Eye, EyeOff, LockKeyhole, Mail, Sparkles, UserRound, Chrome, ArrowLeft } from "lucide-react";
+import { createUserWithEmailAndPassword, GoogleAuthProvider, sendPasswordResetEmail, signInWithEmailAndPassword, signInWithPopup, updateProfile } from "firebase/auth";
 import { auth, db } from "../lib/firebase";
 import { doc, serverTimestamp, setDoc } from "firebase/firestore";
-import { useAuth } from "../context/AuthContext";
+
+type Mode = "login" | "signup" | "forgot";
+const categories = ["Personal", "Business", "Student", "Working", "Developer", "Creator", "Other"];
+const interests = ["Coding", "Research", "Business", "Study", "Writing", "Images", "Productivity"];
 
 export default function Auth() {
-  const [mode, setMode] = useState<"login" | "signup">("login");
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-
-  const resetPassword = async () => {
-    setError("");
-    if (!auth || !email.trim()) { setError("Enter your email first."); return; }
-    try {
-      await sendPasswordResetEmail(auth, email.trim());
-      setError("Password reset email sent. Check your inbox.");
-    } catch {
-      setError("Could not send the reset email. Check the email address.");
-    }
-  };
-
-  const submit = async (event: React.FormEvent) => {
-    event.preventDefault();
-    setError("");
-    if (!auth || !db) {
-      setError("Firebase is not configured. Add your VITE_FIREBASE_* values to .env.");
-      return;
-    }
-    if (password.length < 6) {
-      setError("Password must contain at least 6 characters.");
-      return;
-    }
-    if (mode === "signup" && !name.trim()) {
-      setError("Please enter your name.");
-      return;
-    }
-    setBusy(true);
-    try {
-      if (mode === "signup") {
-        const result = await createUserWithEmailAndPassword(auth, email.trim(), password);
-        await updateProfile(result.user, { displayName: name.trim() });
-        await setDoc(doc(db, "users", result.user.uid), {
-          displayName: name.trim(),
-          email: email.trim(),
-          createdAt: serverTimestamp(),
-          memoryEnabled: true
-        }, { merge: true });
-      } else {
-        await signInWithEmailAndPassword(auth, email.trim(), password);
-      }
-    } catch (err) {
-      const code = (err as { code?: string }).code || "";
-      const messages: Record<string, string> = {
-        "auth/invalid-credential": "Email or password is incorrect.",
-        "auth/email-already-in-use": "An account with this email already exists.",
-        "auth/invalid-email": "Please enter a valid email address.",
-        "auth/too-many-requests": "Too many attempts. Please try again later."
-      };
-      setError(messages[code] || "Something went wrong. Please try again.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  return (
-    <main className="auth-page">
-      <section className="auth-card">
-        <div className="auth-logo"><Sparkles size={22} /> WORLD AI</div>
-        <div className="auth-heading">
-          <h1>{mode === "login" ? "Welcome back" : "Create your account"}</h1>
-          <p>{mode === "login" ? "Continue to your personal AI workspace." : "Your chats, preferences and memory stay with your account."}</p>
-        </div>
-        <form onSubmit={submit} className="auth-form">
-          {mode === "signup" && (
-            <label className="field">
-              <span>Name</span>
-              <div className="field-input"><UserRound size={18} /><input value={name} onChange={e => setName(e.target.value)} placeholder="Your name" autoComplete="name" /></div>
-            </label>
-          )}
-          <label className="field">
-            <span>Email</span>
-            <div className="field-input"><Mail size={18} /><input value={email} onChange={e => setEmail(e.target.value)} placeholder="you@example.com" type="email" autoComplete="email" /></div>
-          </label>
-          <label className="field">
-            <span>Password</span>
-            <div className="field-input"><LockKeyhole size={18} /><input value={password} onChange={e => setPassword(e.target.value)} placeholder="At least 6 characters" type={showPassword ? "text" : "password"} autoComplete={mode === "login" ? "current-password" : "new-password"} /><button type="button" onClick={() => setShowPassword(v => !v)} aria-label="Show password">{showPassword ? <EyeOff size={18} /> : <Eye size={18} />}</button></div>
-          </label>
-          {error && <div className="form-error">{error}</div>}
-          <button className="primary-button auth-submit" disabled={busy}>{busy ? "Please wait…" : mode === "login" ? "Log in" : "Create account"}</button>
-          {mode === "login" && <button type="button" className="forgot-button" onClick={() => void resetPassword()}>Forgot password?</button>}
-        </form>
-        <button className="switch-auth" onClick={() => { setMode(mode === "login" ? "signup" : "login"); setError(""); }}>
-          {mode === "login" ? "New to WORLD AI? Create an account" : "Already have an account? Log in"}
-        </button>
-      </section>
-    </main>
-  );
+  const [mode, setMode] = useState<Mode>("login"); const [step, setStep] = useState(1); const [name, setName] = useState(""); const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [confirm, setConfirm] = useState(""); const [age, setAge] = useState(""); const [category, setCategory] = useState(""); const [selected, setSelected] = useState<string[]>(["Coding"]); const [showPassword, setShowPassword] = useState(false); const [busy, setBusy] = useState(false); const [error, setError] = useState("");
+  const reset = () => { setError(""); setStep(1); };
+  const google = async () => { if (!auth || !db) { setError("Firebase is not configured."); return; } setBusy(true); setError(""); try { const result = await signInWithPopup(auth, new GoogleAuthProvider()); await setDoc(doc(db, "users", result.user.uid), { displayName: result.user.displayName || "WORLD AI user", email: result.user.email || "", lastLoginAt: serverTimestamp() }, { merge: true }); } catch (e) { setError((e as {code?:string}).code === "auth/popup-closed-by-user" ? "Google sign-in was cancelled." : "Google sign-in could not be completed."); } finally { setBusy(false); } };
+  const submitLogin = async (event: React.FormEvent) => { event.preventDefault(); setError(""); if (!auth) return setError("Firebase is not configured."); setBusy(true); try { await signInWithEmailAndPassword(auth, email.trim(), password); } catch (err) { const code = (err as {code?:string}).code || ""; setError(code === "auth/invalid-credential" ? "Email or password is incorrect." : code === "auth/too-many-requests" ? "Too many attempts. Please try again later." : "Could not sign in."); } finally { setBusy(false); } };
+  const sendReset = async (event: React.FormEvent) => { event.preventDefault(); setError(""); if (!auth || !email.trim()) return setError("Enter your email first."); setBusy(true); try { await sendPasswordResetEmail(auth, email.trim()); setError("Reset email sent. Check your inbox."); } catch { setError("Could not send the reset email. Check the email address."); } finally { setBusy(false); } };
+  const create = async () => { if (!auth || !db) return setError("Firebase is not configured."); if (!name.trim() || !email.trim() || password.length < 6 || password !== confirm) { setError(password.length < 6 ? "Password must contain at least 6 characters." : password !== confirm ? "Passwords do not match." : "Complete all fields."); return; } if (!age || Number(age) < 13) return setError("You must be at least 13."); if (!category) return setError("Choose a category."); setBusy(true); try { const result = await createUserWithEmailAndPassword(auth, email.trim(), password); await updateProfile(result.user, { displayName: name.trim() }); await setDoc(doc(db, "users", result.user.uid), { displayName: name.trim(), email: email.trim(), age: Number(age), category, interests: selected, createdAt: serverTimestamp(), memoryEnabled: true }, { merge: true }); } catch (err) { const code = (err as {code?:string}).code || ""; setError(code === "auth/email-already-in-use" ? "An account with this email already exists." : code === "auth/invalid-email" ? "Please enter a valid email address." : "Account creation failed. Please try again."); } finally { setBusy(false); } };
+  const toggle = (item: string) => setSelected(v => v.includes(item) ? v.filter(x => x !== item) : [...v, item]);
+  return <main className="auth-page"><section className="auth-card">
+    <div className="auth-logo"><Sparkles size={22}/> WORLD AI</div>
+    {mode === "forgot" ? <><div className="auth-heading"><button className="back-link" onClick={() => { setMode("login"); reset(); }}><ArrowLeft size={15}/> Back to sign in</button><h1>Reset your password</h1><p>We'll send a secure password reset link to your email.</p></div><form onSubmit={sendReset} className="auth-form"><label className="field"><span>Email</span><div className="field-input"><Mail size={18}/><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com"/></div></label>{error&&<div className="form-error">{error}</div>}<button className="primary-button" disabled={busy}>{busy?"Sending…":"Send reset link"}</button></form></> : <>
+      <div className="auth-heading"><h1>{mode === "login" ? "Welcome back" : step === 1 ? "Create your account" : step === 2 ? "Tell us about you" : "Make WORLD AI yours"}</h1><p>{mode === "login" ? "Your coding-first AI workspace." : "A few choices help WORLD AI personalize your workspace."}</p></div>
+      {mode === "login" ? <form onSubmit={submitLogin} className="auth-form"><button type="button" className="google-button" onClick={()=>void google()} disabled={busy}><Chrome size={18}/> Continue with Google</button><div className="or"><span>or</span></div><label className="field"><span>Email</span><div className="field-input"><Mail size={18}/><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com"/></div></label><label className="field"><span>Password</span><div className="field-input"><LockKeyhole size={18}/><input value={password} onChange={e=>setPassword(e.target.value)} type={showPassword?"text":"password"} autoComplete="current-password" placeholder="Your password"/><button type="button" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label>{error&&<div className="form-error">{error}</div>}<button className="primary-button" disabled={busy}>{busy?"Please wait…":"Sign in"}</button><button type="button" className="forgot-button" onClick={()=>{setMode("forgot");setError("")}}>Forgot password?</button></form> : <>
+        {step === 1 && <div className="auth-form"><label className="field"><span>Display name</span><div className="field-input"><UserRound size={18}/><input value={name} onChange={e=>setName(e.target.value)} autoComplete="name" placeholder="Your name"/></div></label><label className="field"><span>Email</span><div className="field-input"><Mail size={18}/><input value={email} onChange={e=>setEmail(e.target.value)} type="email" autoComplete="email" placeholder="you@example.com"/></div></label><label className="field"><span>Password</span><div className="field-input"><LockKeyhole size={18}/><input value={password} onChange={e=>setPassword(e.target.value)} type={showPassword?"text":"password"} autoComplete="new-password" placeholder="At least 6 characters"/><button type="button" onClick={()=>setShowPassword(v=>!v)}>{showPassword?<EyeOff size={18}/>:<Eye size={18}/>}</button></div></label><label className="field"><span>Confirm password</span><div className="field-input"><LockKeyhole size={18}/><input value={confirm} onChange={e=>setConfirm(e.target.value)} type="password" autoComplete="new-password" placeholder="Repeat password"/></div></label><button className="primary-button" onClick={()=>{if(!name.trim()||!email.trim()||password.length<6||password!==confirm)return setError(password!==confirm?"Passwords do not match.":"Complete all fields.");setError("");setStep(2)}}>Continue</button></div>}
+        {step === 2 && <div className="auth-form"><label className="field"><span>Age</span><div className="field-input"><input value={age} onChange={e=>setAge(e.target.value.replace(/\D/g,"").slice(0,3))} inputMode="numeric" placeholder="Your age"/></div></label><div className="field"><span>How do you use WORLD AI?</span><div className="chip-grid">{categories.map(item=><button type="button" className={`choice-chip ${category===item?"selected":""}`} key={item} onClick={()=>setCategory(item)}>{item}</button>)}</div></div><div className="auth-actions"><button className="secondary-button" onClick={()=>setStep(1)}>Back</button><button className="primary-button" onClick={()=>{if(!age||Number(age)<13)return setError("You must be at least 13.");if(!category)return setError("Choose a category.");setError("");setStep(3)}}>Continue</button></div></div>}
+        {step === 3 && <div className="auth-form"><div className="field"><span>What are you interested in?</span><div className="chip-grid">{interests.map(item=><button type="button" className={`choice-chip ${selected.includes(item)?"selected":""}`} key={item} onClick={()=>toggle(item)}>{item}</button>)}</div></div>{error&&<div className="form-error">{error}</div>}<div className="auth-actions"><button className="secondary-button" onClick={()=>setStep(2)}>Back</button><button className="primary-button" onClick={()=>void create()} disabled={busy}>{busy?"Creating…":"Create account"}</button></div></div>}
+      </>}
+      <button className="switch-auth" onClick={()=>{setMode(mode==="login"?"signup":"login");reset();}}>{mode==="login"?"New to WORLD AI? Create an account":"Already have an account? Sign in"}</button>
+    </>}
+  </section></main>;
 }

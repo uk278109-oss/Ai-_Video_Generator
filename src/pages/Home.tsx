@@ -1,13 +1,12 @@
 import { useState } from "react";
 import { Menu, Image as ImageIcon, List, Mic, Sparkles, Brain, UserCircle2 } from "lucide-react";
-import FeatureCard from "../components/FeatureCard";
 import ChatInput from "../components/ChatInput";
 import { useAuth } from "../context/AuthContext";
 import { useApp } from "../context/AppContext";
 
-interface HomeProps { onOpenMenu: () => void; }
+interface HomeProps { onOpenMenu: () => void; onNavigate: (page: import("../types").AppPage) => void; }
 
-export default function Home({ onOpenMenu }: HomeProps) {
+export default function Home({ onOpenMenu, onNavigate }: HomeProps) {
   const { user } = useAuth();
   const { createChat, memoryEnabled, addMemory } = useApp();
   const [sent, setSent] = useState<string[]>([]);
@@ -31,9 +30,9 @@ export default function Home({ onOpenMenu }: HomeProps) {
     {sent.length > 0 && <section className="conversation-preview"><div className="preview-label">You</div><div className="preview-message">{sent[sent.length - 1]}</div><div className="preview-placeholder"><Sparkles size={18}/> AI response will connect in Phase 3</div></section>}
 
     <section className="feature-section">
-      <FeatureCard icon={<ImageIcon size={30}/>} title="Image Creation" description="Generate images from text" />
-      <FeatureCard icon={<List size={30}/>} title="Code Builder" description="Write & debug code" />
-      <FeatureCard icon={<Mic size={31}/>} title="Voice AI" description="Transcribe & speak" />
+      <button className="feature-card" onClick={() => onNavigate("images")}><div className="feature-icon"><ImageIcon size={30}/></div><div className="feature-title">Image Creation</div><div className="feature-description">Generate images from text</div></button>
+      <button className="feature-card" onClick={() => onNavigate("code")}><div className="feature-icon"><List size={30}/></div><div className="feature-title">Code Builder</div><div className="feature-description">Write & debug code</div></button>
+      <button className="feature-card" onClick={() => onNavigate("voice")}><div className="feature-icon"><Mic size={31}/></div><div className="feature-title">Voice AI</div><div className="feature-description">Transcribe & speak</div></button>
     </section>
 
     <section className="hero-section">
