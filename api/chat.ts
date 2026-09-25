@@ -13,13 +13,13 @@ type RequestBody = {
 };
 
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const XAI_API_KEY = process.env.XAI_API_KEY;
+const GROQ_API_KEY = process.env.GROQ_API_KEY;
 
 const GEMINI_MODEL =
   process.env.GEMINI_TEXT_MODEL || "gemini-2.5-flash";
 
-const XAI_MODEL =
-  process.env.XAI_TEXT_MODEL || "grok-4-1-fast-reasoning";
+const GROQ_MODEL =
+  process.env.GROQ_TEXT_MODEL || "openai/gpt-oss-120b";
 
 const SYSTEM_PROMPT = `
 You are DOG AI, a helpful AI assistant.
@@ -142,12 +142,12 @@ async function callGemini(messages: ChatMessage[]) {
   return text;
 }
 
-async function callGrok(messages: ChatMessage[]) {
-  if (!XAI_API_KEY) {
-    throw new Error("XAI_API_KEY is not configured");
+async function callGroq(messages: ChatMessage[]) {
+  if (!GROQ_API_KEY) {
+    throw new Error("GROQ_API_KEY is not configured");
   }
 
-  const grokMessages = [
+  const groqMessages = [
     {
       role: "system",
       content: SYSTEM_PROMPT,
@@ -160,25 +160,28 @@ async function callGrok(messages: ChatMessage[]) {
       })),
   ];
 
-  const response = await fetch("https://api.x.ai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${XAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: XAI_MODEL,
-      messages: grokMessages,
-      temperature: 0.4,
-      max_tokens: 8192,
-    }),
-  });
+  const response = await fetch(
+    "https://api.groq.com/openai/v1/chat/completions",
+    {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${GROQ_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: GROQ_MODEL,
+        messages: groqMessages,
+        temperature: 0.4,
+        max_tokens: 8192,
+      }),
+    }
+  );
 
   const data = await response.json();
 
   if (!response.ok) {
     throw new Error(
-      `Grok ${response.status}: ${
+      `Groq ${response.status}: ${
         data?.error?.message ||
         data?.error?.code ||
         getErrorText(data)
@@ -189,7 +192,7 @@ async function callGrok(messages: ChatMessage[]) {
   const text = data?.choices?.[0]?.message?.content;
 
   if (typeof text !== "string" || !text.trim()) {
-    throw new Error("Grok returned an empty response");
+    throw new Error("Groq returned an empty response");
   }
 
   return text;
@@ -208,7 +211,6 @@ export default async function handler(
 
   try {
     const body = (req.body || {}) as RequestBody;
-
     const messages = normalizeMessages(body);
 
     if (messages.length === 0) {
@@ -219,7 +221,6 @@ export default async function handler(
     }
 
     const provider = body.provider || "auto";
-
     const errors: string[] = [];
 
     if (provider === "gemini") {
@@ -243,12 +244,12 @@ export default async function handler(
 
     if (provider === "grok") {
       try {
-        const text = await callGrok(messages);
+        const text = await callGroq(messages);
 
         return res.status(200).json({
           ok: true,
           provider: "grok",
-          model: XAI_MODEL,
+          model: GROQ_MODEL,
           text,
         });
       } catch (error) {
@@ -260,7 +261,7 @@ export default async function handler(
       }
     }
 
-    // AUTO: Gemini first, then Grok fallback.
+    // AUTO: Gemini first, then Groq fallback.
     try {
       const text = await callGemini(messages);
 
@@ -279,17 +280,19 @@ export default async function handler(
     }
 
     try {
-      const text = await callGrok(messages);
+      const text = await callGroq(messages);
 
       return res.status(200).json({
         ok: true,
         provider: "grok",
-        model: XAI_MODEL,
+        model: GROQ_MODEL,
         text,
       });
     } catch (error) {
       errors.push(
-        `grok: ${error instanceof Error ? error.message : String(error)}`
+        `groq: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
 
